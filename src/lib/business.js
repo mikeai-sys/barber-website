@@ -1,8 +1,30 @@
 // Admin accounts that can access the dashboard.
+// Now managed via admin_users table in Supabase
 export const ADMIN_EMAILS = ['admin@haytembarber.com', 'abd2008ghafour@gmail.com'];
 export const isAdminEmail = (email) => ADMIN_EMAILS.includes(email);
 // Backward compat
 export const ADMIN_EMAIL = ADMIN_EMAILS[0];
+
+// Check if email is admin (use this for runtime checks)
+// Falls back to hardcoded list if database check fails
+export async function checkIsAdmin(email) {
+  // First check hardcoded list for backward compatibility
+  if (ADMIN_EMAILS.includes(email)) return true;
+  
+  try {
+    const { supabase } = await import('./supabase');
+    const { data, error } = await supabase
+      .from('admin_users')
+      .select('is_admin')
+      .eq('email', email)
+      .eq('is_admin', true)
+      .single();
+    
+    return !error && data?.is_admin === true;
+  } catch {
+    return ADMIN_EMAILS.includes(email);
+  }
+}
 
 // Confirmed real business information ONLY. Do not invent.
 export const BUSINESS = {

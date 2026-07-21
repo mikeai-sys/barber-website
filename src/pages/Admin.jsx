@@ -947,3 +947,206 @@ function AvailabilityTab() {
     </div>
   );
 }
+
+function UsersTab() {
+  const { t } = useLang();
+  const [admins, setAdmins] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
+  const [addError, setAddError] = useState('');
+
+  const loadAdmins = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('admin_users')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.warn('Load admins error:', error.message);
+        setAdmins([]);
+      } else {
+        setAdmins(data || []);
+      }
+    } catch (err) {
+      console.warn('Load admins exception:', err);
+      setAdmins([]);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadAdmins();
+  }, []);
+
+  const searchUsers = async (query) => {
+    if (!query || query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setSearching(true);
+    try {
+      // Search in auth.users via RPC function or direct query
+      // For now, we'll check if the email exists in profiles or bookings
+      const { data: bookings } = await supabase
+        .from('bookings')
+        .select('customer_email')
+        .ilike('customer_email', `%${query}%`)
+        .limit(10);
+      
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('email')
+        .ilike('email', `%${query}%`)
+        .limit(10);
+
+      const emails = new Set();
+      (bookings || []).forEach(b => b.customer_email && emails.add(b.customer_email));
+      (profiles || []).forEach(p => p.email && emails.add(p.email));
+
+      const results = Array.from(emails).map(email => ({ email }));
+      
+      // Filter out existing admins
+      const adminEmails = new Set(admins.map(a => a.email));
+      setSearchResults(results.filter(r => !adminEmails.has(r.email)));
+    } catch (err) {
+      console.warn('Search error:', err);
+    }
+    setSearching(false);
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchUsers(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, admins]);
+
+  const addAdmin = async (email) => {
+    setAddError('');
+    try {
+      const { error } = await supabase
+        .from('admin_users')
+        .insert({ email, is_admin: true });
+      
+      if (error) {
+        setAddError(error.message);
+      } else {
+        setSearchQuery('');
+        setSearchResults([]);
+        loadAdmins();
+      }
+    } catch (err) {
+      setAddError(err.message);
+    }
+  };
+
+  const removeAdmin = async (id) => {
+    if (!confirm('Remove admin privileges?')) return;
+    
+    try {
+      await supabase
+        .from('admin_users')
+        .delete()
+        .eq('id', id);
+      loadAdmins();
+    } catch (err) {
+      console.warn('Remove admin error:', err);
+    }
+  };
+
+  return (
+    <div>
+      <Header title={t.admin.users} />
+      
+      {/* Add Admin Section */}
+      <div className="luxe-card rounded-lg p-5 mb-6">
+        <h3 className="text-sm font-medium text-[color:var(--color-bone)] mb-3">{t.admin.addAdminUser}</h3>
+        <div className="relative">
+          <input
+            type="email"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder={t.admin.searchUsers}
+            className="w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-4 py-3 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none"
+          />
+          {searching && (
+            <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[color:var(--color-ash)]" />
+          )}
+        </div>
+        
+        {addError && (
+          <p className="text-xs text-red-400 mt-2">{addError}</p>
+        )}
+
+        {/* Search Results */}
+        {searchResults.length > 0 && (
+          <div className="mt-3 border border-[color:var(--color-line)] rounded-md overflow-hidden">
+            {searchResults.map((user, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between px-3 py-2 hover:bg-[color:var(--color-smoke)] border-b border-[color:var(--color-line)] last:border-b-0"
+              >
+                <span className="text-sm text-[color:var(--color-bone)]">{user.email}</span>
+                <button
+                  onClick={() => addAdmin(user.email)}
+                  className="text-xs text-[color:var(--color-gold)] hover:underline"
+                >
+                  {t.admin.makeAdmin}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Admin Users List */}
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="animate-spin text-[color:var(--color-gold)]" />
+        </div>
+      ) : admins.length === 0 ? (
+        <Empty text={t.admin.noUsers} />
+      ) : (
+        <div className="space-y-3">
+          {admins.map(admin => (
+            <div key={admin.id} className="luxe-card rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-full bg-[color:var(--color-gold)]/10 flex items-center justify-center shrink-0">
+                  {admin.is_admin ? (
+                    <UserCog size={18} className="text-[color:var(--color-gold)]" />
+                  ) : (
+                    <Users size={18} className="text-[color:var(--color-ash)]" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-medium text-[color:var(--color-bone)] truncate">{admin.email}</div>
+                  <div className="text-xs text-[color:var(--color-ash)]">
+                    {t.admin.adminSince}: {new Date(admin.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] uppercase px-2 py-1 rounded-full ${admin.is_admin ? 'bg-green-500/10 text-green-400' : 'bg-[color:var(--color-line)] text-[color:var(--color-ash)]'}`}>
+                  {admin.is_admin ? t.admin.active : 'User'}
+                </span>
+                {admin.is_admin && admins.length > 1 && (
+                  <button
+                    onClick={() => removeAdmin(admin.id)}
+                    className="text-xs text-red-400 hover:underline"
+                  >
+                    {t.admin.removeAdmin}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
