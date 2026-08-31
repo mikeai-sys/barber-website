@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Scissors, Sparkles, Image as ImageIcon, Star, FileText, Clock, LogOut, Plus, Trash2, Check, X, Loader2, Lock, ArrowLeft, Upload, Ban, Users, Bell, MessageCircle, Megaphone, Play, UserCog, ShoppingBag, Package } from 'lucide-react';
+import { Calendar, Scissors, Sparkles, Image as ImageIcon, Star, FileText, Clock, LogOut, Plus, Trash2, Check, X, Loader2, Lock, ArrowLeft, Upload, Ban, Users, Bell, MessageCircle, Megaphone, Play, UserCog, ShoppingBag, Package, LayoutGrid } from 'lucide-react';
 import supabase from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLang } from '../contexts/LangContext';
@@ -146,8 +146,8 @@ export default function Admin() {
         {tab === 'users' && <UsersTab />}
       </main>
 
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-[color:var(--color-charcoal)]/95 backdrop-blur-xl border-t border-[color:var(--color-line)] px-1 pb-[env(safe-area-inset-bottom)]">
-        <div className="grid grid-cols-4 gap-1 py-1">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-[color:var(--color-charcoal)] border-t border-[color:var(--color-line)] px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+        <div className="grid grid-cols-4 gap-1">
           {primaryTabs.slice(0,3).map(tb => (
             <button key={tb.id} onClick={() => { setTab(tb.id); setMoreOpen(false); }} className={`flex flex-col items-center gap-1 py-2.5 rounded-lg text-[10px] uppercase tracking-wider transition-colors ${tab === tb.id ? 'text-[color:var(--color-gold)] bg-[color:var(--color-gold)]/10' : 'text-[color:var(--color-ash)]'}`}>
               <tb.icon size={20} />
@@ -155,26 +155,30 @@ export default function Admin() {
             </button>
           ))}
           <button onClick={() => setMoreOpen(o => !o)} className={`flex flex-col items-center gap-1 py-2.5 rounded-lg text-[10px] uppercase tracking-wider transition-colors ${moreOpen ? 'text-[color:var(--color-gold)] bg-[color:var(--color-gold)]/10' : 'text-[color:var(--color-ash)]'}`}>
-            <span className="text-[18px] leading-none font-bold">⋮</span>
+            <LayoutGrid size={20} />
             <span className="leading-none">Other</span>
           </button>
         </div>
-        {moreOpen && (
-          <div className="absolute inset-0 z-40" onClick={() => setMoreOpen(false)}>
-            <div className="absolute bottom-[64px] inset-x-2 luxe-card rounded-xl p-3 z-50 shadow-2xl max-h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <div className="text-[11px] tracking-luxe uppercase text-[color:var(--color-ash)] mb-3 px-1">All tools</div>
-              <div className="grid grid-cols-3 gap-2">
-                {[...primaryTabs, ...secondaryTabs].map(tb => (
-                  <button key={tb.id} onClick={() => { setTab(tb.id); setMoreOpen(false); }} className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-colors ${tab === tb.id ? 'bg-[color:var(--color-gold)]/15 border-[color:var(--color-gold)] text-[color:var(--color-gold)]' : 'bg-[color:var(--color-smoke)] border-[color:var(--color-line)] text-[color:var(--color-ash)]'}`}>
-                    <tb.icon size={22} />
-                    <span className="text-[11px] font-medium text-center leading-tight">{tb.label}</span>
-                  </button>
-                ))}
-              </div>
+      </nav>
+      {moreOpen && (
+        <div className="md:hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={() => setMoreOpen(false)}>
+          <div className="fixed bottom-0 inset-x-0 bg-[color:var(--color-charcoal)] rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] max-h-[75vh] overflow-y-auto border-t border-[color:var(--color-line)] shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-[color:var(--color-line)] rounded-full mx-auto mb-4" />
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display text-base font-bold text-[color:var(--color-bone)]">All tools</h3>
+              <button onClick={() => setMoreOpen(false)} className="w-8 h-8 rounded-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] flex items-center justify-center text-[color:var(--color-ash)]"><X size={16} /></button>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {[...primaryTabs, ...secondaryTabs].map(tb => (
+                <button key={tb.id} onClick={() => { setTab(tb.id); setMoreOpen(false); }} className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-colors ${tab === tb.id ? 'bg-[color:var(--color-gold)]/15 border-[color:var(--color-gold)] text-[color:var(--color-gold)]' : 'bg-[color:var(--color-smoke)] border-[color:var(--color-line)] text-[color:var(--color-ash)] active:scale-95'}`}>
+                  <tb.icon size={22} />
+                  <span className="text-[10px] font-medium text-center leading-tight">{tb.label}</span>
+                </button>
+              ))}
             </div>
           </div>
-        )}
-      </nav>
+        </div>
+      )}
     </div>
   );
 }
