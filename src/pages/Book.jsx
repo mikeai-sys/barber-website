@@ -27,7 +27,7 @@ export default function Book() {
   const [monthOffset, setMonthOffset] = useState(0);
   const [selDate, setSelDate] = useState(null);
   const [bookedSlots, setBookedSlots] = useState([]);
-  const [sel, setSel] = useState({ service: null, time: null });
+  const [sel, setSel] = useState({ service: null, hairstyle: null, time: null });
   const [info, setInfo] = useState({ name: '', phone: '', email: '', notes: '' });
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(null);
@@ -46,18 +46,17 @@ export default function Book() {
     if (user) setInfo(i => ({ ...i, email: user.email || i.email, name: i.name || user.user_metadata?.full_name || '' }));
   }, [user]);
 
-  // Auto-select from URL param
   useEffect(() => {
-    if (presetHairstyle && hairstyles.length > 0 && !sel.service) {
+    if (presetHairstyle && hairstyles.length > 0 && !sel.hairstyle) {
       const match = hairstyles.find(h => h.id === presetHairstyle);
-      if (match) { setSel({ ...sel, service: match }); }
+      if (match) setSel(s => ({ ...s, hairstyle: match }));
     }
   }, [presetHairstyle, hairstyles]);
 
   useEffect(() => {
     if (presetService && services.length > 0 && !sel.service) {
       const match = services.find(s => s.id === presetService);
-      if (match) { setSel({ ...sel, service: match }); }
+      if (match) setSel(s => ({ ...s, service: match }));
     }
   }, [presetService, services]);
 
@@ -122,20 +121,28 @@ export default function Book() {
   const monthLabel = monthDate.toLocaleDateString(lang === 'ar' ? 'ar' : lang === 'en' ? 'en-US' : 'fr-FR', { month: 'long', year: 'numeric' });
   const dow = lang === 'ar' ? ['أحد','إثن','ثلا','أرب','خمي','جمع','سبت'] : ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
 
+  const hasSelection = !!(sel.service || sel.hairstyle);
+  const selectedLabel = [sel.service?.title, sel.hairstyle?.title].filter(Boolean).join(' + ');
+  const selectedPrice = (Number(sel.service?.price || 0) + Number(sel.hairstyle?.price || 0)) || null;
+
   const confirm = async () => {
     setErr('');
+    if (!hasSelection) { setErr('Select a service or hairstyle'); return; }
     if (!info.name.trim() || !info.phone.trim()) { setErr(t.common.name + ' + ' + t.common.phone); return; }
     if (!sel.time || !slotsForDate().includes(sel.time)) { setErr('Slot not in barber timetable'); return; }
     if (bookedSlots.includes(sel.time)) { setErr('Slot already booked'); return; }
     setSubmitting(true);
     try {
+      const combinedName = selectedLabel;
+      const combinedId = sel.service?.id || sel.hairstyle?.id;
+      const combinedBarber = sel.service?.barber_id || sel.hairstyle?.barber_id || null;
       const res = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          service_name: sel.service.title, service_id: sel.service.id, booking_date: selDate, booking_time: sel.time,
+          service_name: combinedName, service_id: combinedId, booking_date: selDate, booking_time: sel.time,
           customer_name: info.name, customer_phone: info.phone, customer_email: info.email || null, notes: info.notes || null,
-          barber_id: sel.service.barber_id || null, user_id: user?.id || null,
+          barber_id: combinedBarber, user_id: user?.id || null,
         }),
       });
       const data = await res.json();
@@ -150,9 +157,15 @@ export default function Book() {
     } catch { setErr('Error'); } finally { setSubmitting(false); }
   };
 
-  const selectForBooking = (item) => {
-    setSel({ ...sel, service: item });
-    setStep(0);
+  const toggleService = (item) => {
+    setSel(s => ({ ...s, service: s.service?.id === item.id ? null : item }));
+    if (!hasSelection) setStep(0);
+    else if (step === null) setStep(0);
+  };
+  const toggleHairstyle = (item) => {
+    setSel(s => ({ ...s, hairstyle: s.hairstyle?.id === item.id ? null : item }));
+    if (!hasSelection) setStep(0);
+    else if (step === null) setStep(0);
   };
 
   if (done) {
@@ -172,7 +185,7 @@ export default function Book() {
             <MessageCircle size={18} /> {t.booking.sendWhatsApp}
           </a>
           <div className="mt-6 flex gap-3">
-            <button onClick={() => { setDone(null); setStep(null); setSelDate(null); setSel({ service: null, time: null }); }} className="flex-1 border border-[color:var(--color-line)] text-[color:var(--color-bone)] py-3 rounded-sm text-sm uppercase tracking-wider hover:border-[color:var(--color-gold)] transition">{t.booking.newBooking}</button>
+            <button onClick={() => { setDone(null); setStep(null); setSelDate(null); setSel({ service: null, hairstyle: null, time: null }); }} className="flex-1 border border-[color:var(--color-line)] text-[color:var(--color-bone)] py-3 rounded-sm text-sm uppercase tracking-wider hover:border-[color:var(--color-gold)] transition">{t.booking.newBooking}</button>
             <Link to="/" className="flex-1 btn-gold py-3 rounded-sm text-sm uppercase tracking-wider text-center">{t.nav.home}</Link>
           </div>
         </div>
@@ -189,14 +202,13 @@ export default function Book() {
         <SectionTitle overline={t.booking.title} title={t.booking.title} subtitle={t.booking.sub} />
       </section>
       <section className="py-12 px-6 sm:px-8 max-w-3xl mx-auto">
-        {/* Services row */}
         {services.length > 0 && (
           <div className="mb-8">
-            <h3 className="text-center text-[11px] tracking-luxe uppercase text-[color:var(--color-gold)] mb-4">{t.booking.tabServices}</h3>
-            <div className="flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 scrollbar-none">
+            <h3 className="text-center text-[11px] tracking-luxe uppercase text-[color:var(--color-gold)] mb-4">{t.booking.tabServices} — tap to select, tap again to remove</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {services.map(s => (
-                <div key={s.id} className="shrink-0 w-36 sm:w-44">
-                  <button onClick={() => selectForBooking(s)} className={`w-full text-left group block luxe-card rounded-lg overflow-hidden transition-all ${sel.service?.id === s.id && sel.service?.title === s.title ? '!border-[color:var(--color-gold)] ring-1 ring-[color:var(--color-gold)]' : ''}`}>
+                <div key={s.id}>
+                  <button onClick={() => toggleService(s)} className={`w-full text-left group block luxe-card rounded-lg overflow-hidden transition-all ${sel.service?.id === s.id ? '!border-[color:var(--color-gold)] ring-1 ring-[color:var(--color-gold)]' : ''}`}>
                     <div className="aspect-[4/5] bg-[color:var(--color-smoke)] overflow-hidden relative">
                       {s.image_url ? (
                         <img src={s.image_url} alt={s.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -208,7 +220,7 @@ export default function Book() {
                         {s.category && <div className="text-[8px] tracking-luxe uppercase text-[color:var(--color-gold)] mb-0.5">{s.category}</div>}
                         <h4 className="font-display text-sm font-semibold text-[color:var(--color-bone)] truncate">{s.title}</h4>
                       </div>
-                      {sel.service?.id === s.id && sel.service?.title === s.title && (
+                      {sel.service?.id === s.id && (
                         <div className="absolute top-2 left-2 w-5 h-5 rounded-full bg-[color:var(--color-gold)] flex items-center justify-center"><Check size={12} className="text-[color:var(--color-ink)]" /></div>
                       )}
                     </div>
@@ -222,14 +234,13 @@ export default function Book() {
           </div>
         )}
 
-        {/* Hairstyles row */}
         {hairstyles.length > 0 && (
           <div className="mb-10">
-            <h3 className="text-center text-[11px] tracking-luxe uppercase text-[color:var(--color-gold)] mb-4">{t.booking.tabHairstyles}</h3>
-            <div className="flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 scrollbar-none">
+            <h3 className="text-center text-[11px] tracking-luxe uppercase text-[color:var(--color-gold)] mb-4">{t.booking.tabHairstyles} — you can combine with a service</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {hairstyles.map(h => (
-                <div key={h.id} className="shrink-0 w-36 sm:w-44">
-                  <button onClick={() => selectForBooking(h)} className={`w-full text-left group block luxe-card rounded-lg overflow-hidden transition-all ${sel.service?.id === h.id && sel.service?.title === h.title ? '!border-[color:var(--color-gold)] ring-1 ring-[color:var(--color-gold)]' : ''}`}>
+                <div key={h.id}>
+                  <button onClick={() => toggleHairstyle(h)} className={`w-full text-left group block luxe-card rounded-lg overflow-hidden transition-all ${sel.hairstyle?.id === h.id ? '!border-[color:var(--color-gold)] ring-1 ring-[color:var(--color-gold)]' : ''}`}>
                     <div className="aspect-[4/5] bg-[color:var(--color-smoke)] overflow-hidden relative">
                       {h.image_url ? (
                         <img src={h.image_url} alt={h.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -242,7 +253,7 @@ export default function Book() {
                         {h.category && <div className="text-[8px] tracking-luxe uppercase text-[color:var(--color-gold)] mb-0.5">{h.category}</div>}
                         <h4 className="font-display text-sm font-semibold text-[color:var(--color-bone)] truncate">{h.name}</h4>
                       </div>
-                      {sel.service?.id === h.id && sel.service?.title === h.title && (
+                      {sel.hairstyle?.id === h.id && (
                         <div className="absolute top-2 left-2 w-5 h-5 rounded-full bg-[color:var(--color-gold)] flex items-center justify-center"><Check size={12} className="text-[color:var(--color-ink)]" /></div>
                       )}
                     </div>
@@ -256,8 +267,7 @@ export default function Book() {
           </div>
         )}
 
-        {/* Step indicators + stepper (only when item selected) */}
-        {step !== null && sel.service && (
+        {step !== null && hasSelection && (
           <>
             <div className="flex items-center justify-between mb-10">
               {steps.map((s, i) => (
@@ -273,8 +283,8 @@ export default function Book() {
 
             <div className="mb-6 luxe-card rounded-lg p-4 flex items-center gap-3 text-sm">
               <Scissors size={16} className="text-[color:var(--color-gold)] shrink-0" />
-              <span className="text-[color:var(--color-bone)] font-medium">{sel.service.title}</span>
-              {sel.service.price && <span className="text-[color:var(--color-gold)] ml-auto">{sel.service.price} DA</span>}
+              <span className="text-[color:var(--color-bone)] font-medium">{selectedLabel}</span>
+              {selectedPrice && <span className="text-[color:var(--color-gold)] ml-auto">{selectedPrice} DA</span>}
             </div>
 
             {/* Progress bar */}
@@ -351,11 +361,10 @@ export default function Book() {
                   </div>
                 )}
 
-                {/* STEP 2 — INFO */}
                 {step === 2 && (
                   <div className="space-y-5">
                     <div className="luxe-card rounded-lg p-5 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                      <span className="flex items-center gap-2 text-[color:var(--color-bone)]"><Scissors size={15} className="text-[color:var(--color-gold)]"/> {sel.service?.title}</span>
+                      <span className="flex items-center gap-2 text-[color:var(--color-bone)]"><Scissors size={15} className="text-[color:var(--color-gold)]"/> {selectedLabel}</span>
                       <span className="flex items-center gap-2 text-[color:var(--color-bone)]"><Calendar size={15} className="text-[color:var(--color-gold)]"/> {selDate}</span>
                       <span className="flex items-center gap-2 text-[color:var(--color-bone)]"><Clock size={15} className="text-[color:var(--color-gold)]"/> {sel.time}</span>
                     </div>
@@ -388,10 +397,10 @@ export default function Book() {
           </>
         )}
 
-        {/* Nothing selected — prompt */}
         {step === null && (
           <div className="text-center py-8">
-            <p className="text-sm text-[color:var(--color-ash)]">{dir === 'rtl' ? 'اختر خدمة أو قصة من المعرض أعلاه للمتابعة' : dir === 'en' ? 'Select a service or hairstyle from the gallery above to continue' : 'Sélectionnez un service ou une coiffure dans la galerie ci-dessus pour continuer'}</p>
+            <p className="text-sm text-[color:var(--color-ash)]">{hasSelection ? (dir === 'rtl' ? `تم اختيار: ${selectedLabel} — اضغط التالي` : dir === 'en' ? `Selected: ${selectedLabel} — tap Next` : `Sélectionné: ${selectedLabel}`) : (dir === 'rtl' ? 'اختر خدمة و/أو قصة من المعرض أعلاه — يمكنك اختيار الاثنين معًا' : dir === 'en' ? 'Select a service and/or hairstyle above — you can pick both together' : 'Sélectionnez un service et/ou une coiffure ci-dessus — vous pouvez choisir les deux')}</p>
+            {hasSelection && <button onClick={() => setStep(0)} className="mt-4 btn-gold px-6 py-2 rounded-sm text-xs uppercase tracking-wider">Next →</button>}
           </div>
         )}
       </section>
