@@ -40,10 +40,8 @@ export default function Admin() {
 
   useEffect(() => {
     const checkAdminStatus = async () => {
-      console.log('[Admin] user', user?.email, 'loading', loading);
       if (user?.email) {
         const adminStatus = await checkIsAdmin(user.email);
-        console.log('[Admin] isAdmin', adminStatus, 'for', user.email);
         setIsAdmin(adminStatus);
         setCheckingAdmin(false);
       } else {
