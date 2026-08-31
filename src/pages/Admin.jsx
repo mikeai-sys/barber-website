@@ -95,7 +95,7 @@ export default function Admin() {
     { id: 'reviews', label: t.admin.reviews, icon: Star },
     { id: 'content', label: t.admin.content, icon: FileText },
     { id: 'availability', label: t.admin.availability, icon: Clock },
-    { id: 'ads', label: 'Ads & Promos', icon: Megaphone },
+    { id: 'ads', label: t.admin.ads, icon: Megaphone },
     { id: 'users', label: t.admin.users, icon: UserCog },
   ];
 
@@ -112,8 +112,8 @@ export default function Admin() {
           ))}
         </nav>
         <div className="mt-8 pt-6 border-t border-[color:var(--color-line)] space-y-2">
-          <Link to="/" className="flex items-center gap-2 text-xs text-[color:var(--color-ash)] hover:text-[color:var(--color-bone)]"><ArrowLeft size={13} /> View site</Link>
-          <button onClick={() => supabase.auth.signOut()} className="flex items-center gap-2 text-xs text-[color:var(--color-ash)] hover:text-[color:var(--color-bone)]"><LogOut size={13} /> Sign out</button>
+          <Link to="/" className="flex items-center gap-2 text-xs text-[color:var(--color-ash)] hover:text-[color:var(--color-bone)]"><ArrowLeft size={13} /> {t.admin.viewSite}</Link>
+          <button onClick={() => supabase.auth.signOut()} className="flex items-center gap-2 text-xs text-[color:var(--color-ash)] hover:text-[color:var(--color-bone)]"><LogOut size={13} /> {t.admin.signOut}</button>
         </div>
       </aside>
 
@@ -121,7 +121,7 @@ export default function Admin() {
       <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-[color:var(--color-line)]">
         <div className="flex items-center gap-3">
           <Logo size="sm" />
-          <span className="font-display text-base font-bold text-[color:var(--color-bone)]">Admin</span>
+          <span className="font-display text-base font-bold text-[color:var(--color-bone)]">{t.admin.title}</span>
         </div>
         <div className="flex items-center gap-2">
           <Link to="/" className="w-9 h-9 rounded-full border border-[color:var(--color-line)] flex items-center justify-center text-[color:var(--color-ash)] hover:border-[color:var(--color-gold)]"><ArrowLeft size={16} /></Link>
@@ -156,7 +156,7 @@ export default function Admin() {
           ))}
           <button onClick={() => setMoreOpen(o => !o)} className={`flex flex-col items-center gap-1 py-2.5 rounded-lg text-[10px] uppercase tracking-wider transition-colors ${moreOpen ? 'text-[color:var(--color-gold)] bg-[color:var(--color-gold)]/10' : 'text-[color:var(--color-ash)]'}`}>
             <LayoutGrid size={20} />
-            <span className="leading-none">Other</span>
+            <span className="leading-none">{t.admin.other || t.admin.more}</span>
           </button>
         </div>
       </nav>
@@ -165,7 +165,7 @@ export default function Admin() {
           <div className="fixed bottom-0 inset-x-0 bg-[color:var(--color-charcoal)] rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] max-h-[75vh] overflow-y-auto border-t border-[color:var(--color-line)] shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="w-10 h-1 bg-[color:var(--color-line)] rounded-full mx-auto mb-4" />
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display text-base font-bold text-[color:var(--color-bone)]">All tools</h3>
+              <h3 className="font-display text-base font-bold text-[color:var(--color-bone)]">{t.admin.allTools || t.admin.more}</h3>
               <button onClick={() => setMoreOpen(false)} className="w-8 h-8 rounded-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] flex items-center justify-center text-[color:var(--color-ash)]"><X size={16} /></button>
             </div>
             <div className="grid grid-cols-4 gap-2">

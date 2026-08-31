@@ -39,8 +39,7 @@ export const translations = {
       thursday: 'Jeudi', friday: 'Vendredi', saturday: 'Samedi',
       // Ads
       promotions: 'Promotions', banners: 'Bannières', newPromotion: 'Nouvelle Promotion', discountCode: 'Code Promo', discountPct: 'Réduction %', linkUrl: 'URL Lien', startDate: 'Date Début', endDate: 'Date Fin', position: 'Position', active: 'Actif', mfaActivate: 'Activer', mfaDeactivate: 'Désactiver',
-      // Products & Orders
-      products: 'Produits', orders: 'Commandes', team: 'Équipe', ads: 'Annonces & Promos', more: 'Plus',
+      products: 'Produits', orders: 'Commandes', team: 'Équipe', ads: 'Annonces & Promos', more: 'Plus', other: 'Autre', allTools: 'Tous les outils',
       stock: 'Stock', noProducts: 'Aucun produit.', noOrders: 'Aucune commande.',
       orderPending: 'En attente', orderConfirmed: 'Confirmée', orderCompleted: 'Terminée', orderCancelled: 'Annulée',
       confirmDelete: 'Confirmer la suppression ?',
@@ -121,7 +120,7 @@ export const translations = {
       // Ads
       promotions: 'Promotions', banners: 'Banners', newPromotion: 'New Promotion', discountCode: 'Discount Code', discountPct: 'Discount %', linkUrl: 'Link URL', startDate: 'Start Date', endDate: 'End Date', position: 'Position', active: 'Active', mfaActivate: 'Enable', mfaDeactivate: 'Disable',
       // Products & Orders
-      products: 'Products', orders: 'Orders', team: 'Team', ads: 'Ads & Promos', more: 'More',
+      products: 'Products', orders: 'Orders', team: 'Team', ads: 'Ads & Promos', more: 'More', other: 'Other', allTools: 'All tools',
       stock: 'Stock', noProducts: 'No products yet.', noOrders: 'No orders.',
       orderPending: 'Pending', orderConfirmed: 'Confirmed', orderCompleted: 'Completed', orderCancelled: 'Cancelled',
       confirmDelete: 'Confirm delete?',
@@ -202,7 +201,7 @@ export const translations = {
       // Ads
       promotions: 'العروض', banners: 'اللافتات', newPromotion: 'عرض جديد', discountCode: 'رمز الخصم', discountPct: 'نسبة الخصم %', linkUrl: 'رابط URL', startDate: 'تاريخ البداية', endDate: 'تاريخ النهاية', position: 'الموضع', active: 'نشط', mfaActivate: 'تفعيل', mfaDeactivate: 'تعطيل',
       // Products & Orders
-      products: 'المنتجات', orders: 'الطلبات', team: 'الفريق', ads: 'الإعلانات والعروض', more: 'المزيد',
+      products: 'المنتجات', orders: 'الطلبات', team: 'الفريق', ads: 'الإعلانات والعروض', more: 'المزيد', other: 'أخرى', allTools: 'جميع الأدوات',
       stock: 'المخزون', noProducts: 'لا توجد منتجات.', noOrders: 'لا توجد طلبات.',
       orderPending: 'قيد الانتظار', orderConfirmed: 'مؤكدة', orderCompleted: 'مكتملة', orderCancelled: 'ملغاة',
       confirmDelete: 'تأكيد الحذف؟',
