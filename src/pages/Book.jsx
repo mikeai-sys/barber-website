@@ -87,15 +87,26 @@ export default function Book() {
     return false;
   };
 
+  const genSlots = (open, close) => {
+    const [oh, om] = open.split(':').map(Number);
+    const [ch, cm] = close.split(':').map(Number);
+    let cur = oh * 60 + om;
+    let end = ch * 60 + cm;
+    if (end <= cur) end += 24 * 60;
+    const out = [];
+    for (; cur < end; cur += 30) {
+      const h = Math.floor((cur % (24*60)) / 60);
+      const m = cur % 60;
+      out.push(String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0'));
+    }
+    return out;
+  };
   const slotsForDate = () => {
     if (!selDate) return [];
     const d = new Date(selDate + 'T00:00:00');
     const dh = hoursByDay[d.getDay()];
     if (dh && dh.is_closed) return [];
-    let base = DEFAULT_SLOTS;
-    if (dh && dh.open_time && dh.close_time) {
-      base = DEFAULT_SLOTS.filter(s => s >= dh.open_time.slice(0, 5) && s < dh.close_time.slice(0, 5));
-    }
+    let base = dh && dh.open_time && dh.close_time ? genSlots(dh.open_time.slice(0,5), dh.close_time.slice(0,5)) : DEFAULT_SLOTS;
     const now = new Date();
     const isToday = ymd(now) === selDate;
     if (isToday) {
