@@ -38,11 +38,12 @@ export default function Admin() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [checkingAdmin, setCheckingAdmin] = useState(true);
 
-  // Check if user is admin from database
   useEffect(() => {
     const checkAdminStatus = async () => {
+      console.log('[Admin] user', user?.email, 'loading', loading);
       if (user?.email) {
         const adminStatus = await checkIsAdmin(user.email);
+        console.log('[Admin] isAdmin', adminStatus, 'for', user.email);
         setIsAdmin(adminStatus);
         setCheckingAdmin(false);
       } else {

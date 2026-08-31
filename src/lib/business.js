@@ -2,14 +2,17 @@ export async function checkIsAdmin(email) {
   if (!email) return false;
   try {
     const { supabase } = await import('./supabase');
+    const norm = email.toLowerCase().trim();
     const { data, error } = await supabase
       .from('admin_users')
       .select('is_admin')
-      .eq('email', email.toLowerCase().trim())
+      .eq('email', norm)
       .eq('is_admin', true)
       .single();
+    console.log('[checkIsAdmin]', norm, { data, error: error?.message, code: error?.code });
     return !error && data?.is_admin === true;
-  } catch {
+  } catch (e) {
+    console.log('[checkIsAdmin] catch', e);
     return false;
   }
 }
