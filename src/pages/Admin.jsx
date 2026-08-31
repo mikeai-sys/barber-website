@@ -146,34 +146,34 @@ export default function Admin() {
         {tab === 'users' && <UsersTab />}
       </main>
 
-      {/* Mobile bottom tab bar */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-[color:var(--color-charcoal)] border-t border-[color:var(--color-line)] px-1 pb-2">
-        <div className="flex items-center justify-around">
-          {primaryTabs.map(tb => (
-            <button key={tb.id} onClick={() => { setTab(tb.id); setMoreOpen(false); }} className={`flex flex-col items-center gap-0.5 py-2 px-2 text-[10px] uppercase tracking-wider transition-colors min-w-0 ${tab === tb.id ? 'text-[color:var(--color-gold)]' : 'text-[color:var(--color-ash)]'}`}>
-              <tb.icon size={18} className={tab === tb.id ? 'text-[color:var(--color-gold)]' : ''} />
-              <span className="truncate max-w-[60px]">{tb.label}</span>
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-[color:var(--color-charcoal)]/95 backdrop-blur-xl border-t border-[color:var(--color-line)] px-1 pb-[env(safe-area-inset-bottom)]">
+        <div className="grid grid-cols-4 gap-1 py-1">
+          {primaryTabs.slice(0,3).map(tb => (
+            <button key={tb.id} onClick={() => { setTab(tb.id); setMoreOpen(false); }} className={`flex flex-col items-center gap-1 py-2.5 rounded-lg text-[10px] uppercase tracking-wider transition-colors ${tab === tb.id ? 'text-[color:var(--color-gold)] bg-[color:var(--color-gold)]/10' : 'text-[color:var(--color-ash)]'}`}>
+              <tb.icon size={20} />
+              <span className="truncate max-w-[64px] leading-none">{tb.label}</span>
             </button>
           ))}
-          <div className="relative">
-            <button onClick={() => setMoreOpen(o => !o)} className={`flex flex-col items-center gap-0.5 py-2 px-2 text-[10px] uppercase tracking-wider transition-colors ${moreOpen ? 'text-[color:var(--color-gold)]' : 'text-[color:var(--color-ash)]'}`}>
-              <span className={`text-lg font-bold leading-none ${moreOpen ? 'text-[color:var(--color-gold)]' : ''}`}>•••</span>
-              <span>More</span>
-            </button>
-            {moreOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
-                <div className="absolute bottom-14 right-0 luxe-card rounded-lg p-2 z-50 shadow-2xl min-w-[180px]">
-                  {secondaryTabs.map(tb => (
-                    <button key={tb.id} onClick={() => { setTab(tb.id); setMoreOpen(false); }} className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-sm whitespace-nowrap transition-colors ${tab === tb.id ? 'bg-[color:var(--color-gold)]/10 text-[color:var(--color-gold)]' : 'text-[color:var(--color-ash)] hover:text-[color:var(--color-bone)]'}`}>
-                      <tb.icon size={17} /> {tb.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          <button onClick={() => setMoreOpen(o => !o)} className={`flex flex-col items-center gap-1 py-2.5 rounded-lg text-[10px] uppercase tracking-wider transition-colors ${moreOpen ? 'text-[color:var(--color-gold)] bg-[color:var(--color-gold)]/10' : 'text-[color:var(--color-ash)]'}`}>
+            <span className="text-[18px] leading-none font-bold">⋮</span>
+            <span className="leading-none">Other</span>
+          </button>
         </div>
+        {moreOpen && (
+          <div className="absolute inset-0 z-40" onClick={() => setMoreOpen(false)}>
+            <div className="absolute bottom-[64px] inset-x-2 luxe-card rounded-xl p-3 z-50 shadow-2xl max-h-[60vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="text-[11px] tracking-luxe uppercase text-[color:var(--color-ash)] mb-3 px-1">All tools</div>
+              <div className="grid grid-cols-3 gap-2">
+                {[...primaryTabs, ...secondaryTabs].map(tb => (
+                  <button key={tb.id} onClick={() => { setTab(tb.id); setMoreOpen(false); }} className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-colors ${tab === tb.id ? 'bg-[color:var(--color-gold)]/15 border-[color:var(--color-gold)] text-[color:var(--color-gold)]' : 'bg-[color:var(--color-smoke)] border-[color:var(--color-line)] text-[color:var(--color-ash)]'}`}>
+                    <tb.icon size={22} />
+                    <span className="text-[11px] font-medium text-center leading-tight">{tb.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
     </div>
   );
@@ -229,7 +229,9 @@ function NotificationBar({ onOpenBookings }) {
         {unread > 0 && <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-[color:var(--color-gold)] text-[color:var(--color-ink)] text-[11px] font-bold flex items-center justify-center">{unread}</span>}
       </button>
       {open && (
-        <div className="absolute top-13 right-0 mt-2 w-72 sm:w-80 max-h-96 overflow-y-auto luxe-card rounded-lg z-50 shadow-2xl">
+        <>
+          <div className="fixed inset-0 z-40 sm:hidden" onClick={() => setOpen(false)} />
+          <div className="fixed sm:absolute inset-x-3 sm:inset-x-auto sm:right-0 top-[72px] sm:top-12 mt-2 w-auto sm:w-80 max-h-[65vh] sm:max-h-96 overflow-y-auto luxe-card rounded-xl z-50 shadow-2xl border border-[color:var(--color-line)]">
           <div className="p-3 border-b border-[color:var(--color-line)] flex items-center justify-between">
             <span className="text-sm font-medium text-[color:var(--color-bone)]">{t.admin.notifications}</span>
             {notifs.length > 0 && <button onClick={markAll} className="text-xs text-[color:var(--color-gold)]">{t.admin.markAllRead}</button>}
@@ -246,9 +248,10 @@ function NotificationBar({ onOpenBookings }) {
               </div>
             </div>
           ))}
-        </div>
-      )}
-    </div>
+          </div>
+          </>
+        )}
+      </div>
   );
 }
 
