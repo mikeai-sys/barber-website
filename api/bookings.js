@@ -36,14 +36,29 @@ export default async function handler(req, res) {
       if (!b.service_name || !b.booking_date || !b.booking_time || !b.customer_name || !b.customer_phone) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
-      // prevent double booking of same slot
+      const d = new Date(b.booking_date + 'T00:00:00');
+      const dow = d.getDay();
+      const { data: closure } = await supabase.from('availability_closures').select('id').eq('closed_date', b.booking_date).limit(1);
+      if (closure && closure.length > 0) return res.status(400).json({ error: 'Shop closed on this date' });
+      const { data: hours } = await supabase.from('availability_hours').select('*').eq('day_of_week', dow).limit(1);
+      const dh = hours && hours[0];
+      if (dh) {
+        if (dh.is_closed) return res.status(400).json({ error: 'Shop closed on this weekday' });
+        if (dh.open_time && dh.close_time) {
+          const t = b.booking_time.slice(0,5);
+          if (t < dh.open_time.slice(0,5) || t >= dh.close_time.slice(0,5)) return res.status(400).json({ error: 'Time outside barber timetable' });
+        }
+      }
       const { data: existing } = await supabase.from('bookings').select('id').eq('booking_date', b.booking_date).eq('booking_time', b.booking_time).neq('status', 'cancelled');
       if (existing && existing.length > 0) {
         return res.status(409).json({ error: 'Slot already booked' });
       }
       const row = { ...b, reference: genRef(), status: 'confirmed' };
       const { data, error } = await supabase.from('bookings').insert(row).select().single();
-      if (error) throw error;
+      if (error) {
+        if (error.code === '23505') return res.status(409).json({ error: 'Slot already booked' });
+        throw error;
+      }
       await supabase.from('notifications').insert({
         type: 'booking',
         title: 'Nouvelle réservation',
@@ -53,14 +68,13 @@ export default async function handler(req, res) {
       });
       return res.status(201).json(data);
     }
-    // Allow users to cancel their own bookings (status='cancelled' with user_id match)
     if (req.method === 'PUT') {
-      const { id, status, user_id } = req.body;
-      // If user is cancelling their own booking, allow without admin auth
+      const targetId = req.body.id;
+      const { status, user_id } = req.body;
       if (status === 'cancelled' && user_id) {
-        const { data: booking } = await supabase.from('bookings').select('id, user_id').eq('id', id).single();
+        const { data: booking } = await supabase.from('bookings').select('id, user_id').eq('id', targetId).single();
         if (booking && booking.user_id === user_id) {
-          const { data, error } = await supabase.from('bookings').update({ status }).eq('id', id).select().single();
+          const { data, error } = await supabase.from('bookings').update({ status }).eq('id', targetId).select().single();
           if (error) throw error;
           return res.status(200).json(data);
         }

@@ -10,8 +10,8 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const [hours, closures] = await Promise.all([
-        supabase.from('working_hours').select('*').order('day_of_week', { ascending: true }),
-        supabase.from('closures').select('*').order('closed_date', { ascending: true }),
+        supabase.from('availability_hours').select('*').order('day_of_week', { ascending: true }),
+        supabase.from('availability_closures').select('*').order('closed_date', { ascending: true }),
       ]);
       if (hours.error) throw hours.error;
       if (closures.error) throw closures.error;
@@ -20,21 +20,19 @@ export default async function handler(req, res) {
     const auth = await requireAdmin(req);
     if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
     if (req.method === 'PUT') {
-      // update a working_hours row by day_of_week
       const { day_of_week, ...rest } = req.body;
-      const { data, error } = await supabase.from('working_hours').upsert({ day_of_week, ...rest }, { onConflict: 'day_of_week' }).select().single();
+      const { data, error } = await supabase.from('availability_hours').upsert({ day_of_week, ...rest }, { onConflict: 'day_of_week' }).select().single();
       if (error) throw error;
       return res.status(200).json(data);
     }
     if (req.method === 'POST') {
-      // add a closure/vacation
       const { closed_date, reason } = req.body;
-      const { data, error } = await supabase.from('closures').insert({ closed_date, reason }).select().single();
+      const { data, error } = await supabase.from('availability_closures').insert({ closed_date, reason }).select().single();
       if (error) throw error;
       return res.status(201).json(data);
     }
     if (req.method === 'DELETE') {
-      const { error } = await supabase.from('closures').delete().eq('id', req.body.id);
+      const { error } = await supabase.from('availability_closures').delete().eq('id', req.body.id);
       if (error) throw error;
       return res.status(200).json({ ok: true });
     }

@@ -1,8 +1,18 @@
-// Admin accounts that can access the dashboard.
-export const ADMIN_EMAILS = ['admin@haytembarber.com', 'abd2008ghafour@gmail.com'];
-export const isAdminEmail = (email) => ADMIN_EMAILS.includes(email);
-// Backward compat
-export const ADMIN_EMAIL = ADMIN_EMAILS[0];
+export async function checkIsAdmin(email) {
+  if (!email) return false;
+  try {
+    const { supabase } = await import('./supabase');
+    const { data, error } = await supabase
+      .from('admin_users')
+      .select('is_admin')
+      .eq('email', email.toLowerCase().trim())
+      .eq('is_admin', true)
+      .single();
+    return !error && data?.is_admin === true;
+  } catch {
+    return false;
+  }
+}
 
 // Confirmed real business information ONLY. Do not invent.
 export const BUSINESS = {

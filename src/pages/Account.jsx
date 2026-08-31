@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { LogOut, Calendar, Clock, Scissors, User, LayoutDashboard, ArrowRight, Settings, Loader2, Check, Ban, Key, ShieldCheck } from 'lucide-react';
+import { LogOut, Calendar, Clock, Scissors, User, LayoutDashboard, ArrowRight, Settings, Loader2, Check, Ban, Key, ShieldCheck, ShoppingBag, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import supabase from '../lib/supabase';
 import { useLang } from '../contexts/LangContext';
 import { useAuth } from '../contexts/AuthContext';
-import { isAdminEmail, BUSINESS } from '../lib/business';
+import { useToast } from '../contexts/ToastContext';
+import { checkIsAdmin, BUSINESS } from '../lib/business';
 
 const STATUS_STYLE = {
   cancelled: 'bg-red-500/10 text-red-400',
@@ -31,7 +32,8 @@ export default function Account() {
   const nav = useNavigate();
   const loc = useLocation();
   const [tab, setTab] = useState('bookings');
-  const isAdmin = isAdminEmail(user?.email);
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => { checkIsAdmin(user?.email).then(setIsAdmin); }, [user]);
 
   useEffect(() => { if (loc.pathname === '/account') nav('/dashboard', { replace: true }); }, [loc.pathname]);
   useEffect(() => { if (!loading && !user) nav('/login'); }, [user, loading]);
@@ -41,6 +43,7 @@ export default function Account() {
   const tabs = [
     { id: 'profile', label: t.dashboard.tabProfile, icon: User },
     { id: 'bookings', label: t.dashboard.tabBookings, icon: Calendar },
+    { id: 'orders', label: t.dashboard.tabOrders, icon: ShoppingBag },
     { id: 'settings', label: t.dashboard.tabSettings, icon: Settings },
   ];
 
@@ -104,6 +107,7 @@ export default function Account() {
             >
               {tab === 'profile' && <ProfileTab user={user} />}
               {tab === 'bookings' && <BookingsTab user={user} />}
+              {tab === 'orders' && <OrdersTab user={user} />}
               {tab === 'settings' && <SettingsTab user={user} />}
             </motion.div>
           </AnimatePresence>
@@ -136,6 +140,7 @@ export default function Account() {
    ============================================================ */
 function ProfileTab({ user }) {
   const { t } = useLang();
+  const toast = useToast();
   const [name, setName] = useState(user.user_metadata?.full_name || '');
   const [phone, setPhone] = useState(user.user_metadata?.phone || '');
   const [saving, setSaving] = useState(false);
@@ -184,7 +189,7 @@ function ProfileTab({ user }) {
   const uploadAvatar = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { alert(t.dashboard.imageMaxError); return; }
+    if (file.size > 2 * 1024 * 1024) { toast(t.dashboard.imageMaxError, 'warning'); return; }
     setUploading(true);
     try {
       const ext = file.name.split('.').pop() || 'jpg';
@@ -198,7 +203,7 @@ function ProfileTab({ user }) {
         setAvatarUrl(bustUrl);
         await supabase.auth.updateUser({ data: { avatar_url: bustUrl } });
       }
-    } catch (err) { alert(t.dashboard.uploadError + ': ' + err.message); }
+    } catch (err) { toast(t.dashboard.uploadError + ': ' + err.message, 'error'); }
     setUploading(false);
   };
 
@@ -456,6 +461,56 @@ function BookingsTab({ user }) {
                   <button onClick={() => cancel(b.id)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-400/30 text-red-400 text-xs font-medium hover:bg-red-400/10 transition"><Ban size={13} /> {t.dashboard.cancelBooking}</button>
                 </div>
               )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   ORDERS TAB
+   ============================================================ */
+function OrdersTab({ user }) {
+  const { t } = useLang();
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const load = async () => {
+    const { data } = await supabase.from('orders').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+    setRows(data || []);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, [user]);
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-[color:var(--color-gold)]" size={28} /></div>;
+  return (
+    <div>
+      <h1 className="font-display text-2xl font-bold text-[color:var(--color-bone)] mb-5">{t.dashboard.myOrders}</h1>
+      {rows.length === 0 ? (
+        <div className="luxe-card rounded-xl py-16 text-center">
+          <Package className="mx-auto text-[color:var(--color-line)] mb-4" size={44} />
+          <p className="text-[color:var(--color-ash)] mb-5">{t.dashboard.noOrders}</p>
+          <Link to="/store" className="inline-flex btn-gold px-6 py-3 rounded-lg text-sm font-semibold uppercase tracking-wider">{t.dashboard.viewStore}</Link>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {rows.map(o => (
+            <div key={o.id} className="luxe-card rounded-xl p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-lg bg-[color:var(--color-gold)]/10 flex items-center justify-center shrink-0">
+                    <ShoppingBag size={16} className="text-[color:var(--color-gold)]" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-medium text-[color:var(--color-bone)] text-sm block">{t.dashboard.order} #{o.reference}</span>
+                    {o.items && <span className="text-xs text-[color:var(--color-ash)]">{o.items.length} {t.dashboard.tabOrders}</span>}
+                  </div>
+                </div>
+                <span className={`text-[10px] uppercase px-2.5 py-1 rounded-full shrink-0 font-medium ${STATUS_STYLE[o.status] || ''}`}>{STATUS_LABEL_FN(t)[o.status] || o.status}</span>
+              </div>
+              <div className="flex items-center gap-4 text-sm text-[color:var(--color-ash)] ml-[46px]">
+                <span className="flex items-center gap-1.5">{t.store.total}: <span className="text-[color:var(--color-gold)] font-medium">{o.total} DA</span></span>
+              </div>
             </div>
           ))}
         </div>

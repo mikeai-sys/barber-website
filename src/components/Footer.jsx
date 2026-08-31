@@ -16,6 +16,7 @@ export default function Footer() {
     { to: '/about', label: t.nav.about },
     { to: '/services', label: t.nav.services },
     { to: '/hairstyles', label: t.nav.hairstyles },
+    { to: '/store', label: t.nav.store },
     { to: '/gallery', label: t.nav.gallery },
     { to: '/contact', label: t.nav.contact },
   ];

@@ -1,11 +1,11 @@
 /*
- * Static background — pure CSS radial gradients, zero JS, zero blur.
+ * Static background — pure CSS gradients, zero JS, zero blur.
  * No canvas, no requestAnimationFrame, no GPU-heavy filters.
  */
 export default function LiquidBackground() {
   return (
     <div className="fixed inset-0 -z-10 pointer-events-none" aria-hidden>
-      {/* Subtle radial gradient blobs — static, no animation */}
+      {/* Warm gradient blobs */}
       <div className="absolute inset-0" style={{
         background: `
           radial-gradient(ellipse 60% 50% at 20% 30%, rgba(184,115,51,0.15) 0%, transparent 70%),

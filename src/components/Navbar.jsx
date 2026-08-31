@@ -6,12 +6,13 @@ import Logo from './Logo';
 import LangSwitcher from './LangSwitcher';
 import { useLang } from '../contexts/LangContext';
 import { useAuth } from '../contexts/AuthContext';
-import { isAdminEmail } from '../lib/business';
+import { checkIsAdmin } from '../lib/business';
 
 export default function Navbar() {
   const { t } = useLang();
   const { user } = useAuth();
-  const isAdmin = isAdminEmail(user?.email);
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => { checkIsAdmin(user?.email).then(setIsAdmin); }, [user]);
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const loc = useLocation();
@@ -29,6 +30,7 @@ export default function Navbar() {
     { to: '/services', label: t.nav.services },
     { to: '/hairstyles', label: t.nav.hairstyles },
     { to: '/gallery', label: t.nav.gallery },
+    { to: '/store', label: t.nav.store },
     { to: '/contact', label: t.nav.contact },
     { to: '/promos', label: t.nav.promos },
   ];

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Scissors, ChevronLeft, ChevronRight, Check, Clock, Calendar, CheckCircle2, Loader2, ArrowRight, ArrowLeft, MessageCircle, Info } from 'lucide-react';
 import { useLang } from '../contexts/LangContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,6 +20,7 @@ export default function Book() {
   const presetService = searchParams.get('service');
   const hasPreset = !!(presetHairstyle || presetService);
   const [step, setStep] = useState(hasPreset ? 0 : null);
+  const [stepDirection, setStepDirection] = useState(1);
   const [services, setServices] = useState([]);
   const [hairstyles, setHairstyles] = useState([]);
   const [avail, setAvail] = useState({ hours: [], closures: [] });
@@ -61,8 +63,10 @@ export default function Book() {
 
   useEffect(() => {
     if (!selDate) return;
-    supabase.from('bookings').select('booking_time').eq('booking_date', selDate).in('status', ['confirmed', 'in_progress'])
-      .then(({ data }) => setBookedSlots((data || []).map(b => b.booking_time)))
+    setBookedSlots([]);
+    fetch(`/api/bookings?date=${selDate}`)
+      .then(r => r.json())
+      .then(data => setBookedSlots(Array.isArray(data) ? data.map(b => b.booking_time) : []))
       .catch(() => setBookedSlots([]));
   }, [selDate]);
 
@@ -110,19 +114,27 @@ export default function Book() {
   const confirm = async () => {
     setErr('');
     if (!info.name.trim() || !info.phone.trim()) { setErr(t.common.name + ' + ' + t.common.phone); return; }
+    if (!sel.time || !slotsForDate().includes(sel.time)) { setErr('Slot not in barber timetable'); return; }
+    if (bookedSlots.includes(sel.time)) { setErr('Slot already booked'); return; }
     setSubmitting(true);
     try {
-      const ref = 'HTB-' + Date.now().toString(36).toUpperCase().slice(-4) + Math.random().toString(36).slice(2, 5).toUpperCase();
-      const { data, error } = await supabase.from('bookings').insert({
-        reference: ref,
-        service_name: sel.service.title, service_id: sel.service.id, booking_date: selDate, booking_time: sel.time,
-        customer_name: info.name, customer_phone: info.phone, customer_email: info.email || null, notes: info.notes || null,
-        barber_id: sel.service.barber_id || null, user_id: user?.id || null,
-      }).select().single();
-      if (!error) {
+      const res = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service_name: sel.service.title, service_id: sel.service.id, booking_date: selDate, booking_time: sel.time,
+          customer_name: info.name, customer_phone: info.phone, customer_email: info.email || null, notes: info.notes || null,
+          barber_id: sel.service.barber_id || null, user_id: user?.id || null,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
         setDone(data);
+      } else if (res.status === 409) {
+        setErr(data.error || 'Slot already booked');
+        fetch(`/api/bookings?date=${selDate}`).then(r => r.json()).then(d => setBookedSlots(Array.isArray(d) ? d.map(b => b.booking_time) : []));
       } else {
-        setErr(error.message || 'Error');
+        setErr(data.error || 'Error');
       }
     } catch { setErr('Error'); } finally { setSubmitting(false); }
   };
@@ -254,82 +266,106 @@ export default function Book() {
               {sel.service.price && <span className="text-[color:var(--color-gold)] ml-auto">{sel.service.price} DA</span>}
             </div>
 
-            {/* STEP 0 — DATE */}
-            {step === 0 && (
-              <div className="luxe-card rounded-lg p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <button disabled={monthOffset === 0} onClick={() => setMonthOffset(m => Math.max(0, m - 1))} className="w-9 h-9 rounded-full border border-[color:var(--color-line)] flex items-center justify-center text-[color:var(--color-bone)] disabled:opacity-30"><ChevronLeft size={18} /></button>
-                  <h3 className="font-display text-lg font-semibold text-[color:var(--color-bone)] capitalize">{monthLabel}</h3>
-                  <button disabled={monthOffset >= 3} onClick={() => setMonthOffset(m => Math.min(3, m + 1))} className="w-9 h-9 rounded-full border border-[color:var(--color-line)] flex items-center justify-center text-[color:var(--color-bone)] disabled:opacity-30"><ChevronRight size={18} /></button>
-                </div>
-                <div className="grid grid-cols-7 gap-1 mb-2">{dow.map(d => <div key={d} className="text-center text-[10px] uppercase tracking-wide text-[color:var(--color-ash)] py-1">{d}</div>)}</div>
-                <div className="grid grid-cols-7 gap-1">
-                  {[...Array(firstDay)].map((_, i) => <div key={`e${i}`} />)}
-                  {[...Array(daysInMonth)].map((_, i) => {
-                    const d = new Date(monthDate.getFullYear(), monthDate.getMonth(), i + 1);
-                    const key = ymd(d);
-                    const blocked = isBlocked(d);
-                    const active = selDate === key;
-                    return (
-                      <button key={key} disabled={blocked} onClick={() => { setSelDate(key); setSel(s => ({ ...s, time: null })); }}
-                        className={`aspect-square rounded-md text-sm flex items-center justify-center transition-colors ${active ? 'btn-gold font-bold' : blocked ? 'text-[color:var(--color-line)] cursor-not-allowed line-through' : 'text-[color:var(--color-bone)] hover:bg-[color:var(--color-smoke)] border border-transparent hover:border-[color:var(--color-gold)]'}`}>
-                        {i + 1}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-[color:var(--color-ash)] mt-5 text-center">{t.booking.pickDate}</p>
+            {/* Progress bar */}
+            {step !== null && (
+              <div className="w-full h-1 bg-[color:var(--color-smoke)] rounded-full overflow-hidden mb-6">
+                <motion.div
+                  className="h-full bg-[color:var(--color-gold)] rounded-full"
+                  initial={{ width: '0%' }}
+                  animate={{ width: `${((step + 1) / 3) * 100}%` }}
+                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                />
               </div>
             )}
 
-            {/* STEP 1 — TIME */}
-            {step === 1 && (
-              <div>
-                {availableSlots().length === 0 ? (
-                  <div className="luxe-card rounded-lg py-16 text-center"><Clock className="mx-auto text-[color:var(--color-line)] mb-3" size={40} /><p className="text-[color:var(--color-ash)]">{t.booking.noSlots}</p></div>
-                ) : (
-                  <>
-                    <p className="text-center text-xs text-[color:var(--color-ash)] mb-5">{t.booking.onlyAvailable}</p>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                      {availableSlots().map(slot => {
-                        const active = sel.time === slot;
+            {/* Animated steps */}
+            <AnimatePresence mode="wait" custom={stepDirection}>
+              <motion.div
+                key={step}
+                custom={stepDirection}
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -40 }}
+                transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+              >
+                {/* STEP 0 — DATE */}
+                {step === 0 && (
+                  <div className="luxe-card rounded-lg p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <button disabled={monthOffset === 0} onClick={() => setMonthOffset(m => Math.max(0, m - 1))} className="w-9 h-9 rounded-full border border-[color:var(--color-line)] flex items-center justify-center text-[color:var(--color-bone)] disabled:opacity-30"><ChevronLeft size={18} /></button>
+                      <h3 className="font-display text-lg font-semibold text-[color:var(--color-bone)] capitalize">{monthLabel}</h3>
+                      <button disabled={monthOffset >= 3} onClick={() => setMonthOffset(m => Math.min(3, m + 1))} className="w-9 h-9 rounded-full border border-[color:var(--color-line)] flex items-center justify-center text-[color:var(--color-bone)] disabled:opacity-30"><ChevronRight size={18} /></button>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1 mb-2">{dow.map(d => <div key={d} className="text-center text-[10px] uppercase tracking-wide text-[color:var(--color-ash)] py-1">{d}</div>)}</div>
+                    <div className="grid grid-cols-7 gap-1">
+                      {[...Array(firstDay)].map((_, i) => <div key={`e${i}`} />)}
+                      {[...Array(daysInMonth)].map((_, i) => {
+                        const d = new Date(monthDate.getFullYear(), monthDate.getMonth(), i + 1);
+                        const key = ymd(d);
+                        const blocked = isBlocked(d);
+                        const active = selDate === key;
                         return (
-                          <button key={slot} onClick={() => setSel({ ...sel, time: slot })}
-                            className={`py-3 rounded-md text-sm transition-colors ${active ? 'btn-gold font-semibold' : 'border border-[color:var(--color-line)] text-[color:var(--color-bone)] hover:border-[color:var(--color-gold)]'}`}>
-                            {slot}
+                          <button key={key} disabled={blocked} onClick={() => { setSelDate(key); setSel(s => ({ ...s, time: null })); }}
+                            className={`aspect-square rounded-md text-sm flex items-center justify-center transition-colors ${active ? 'btn-gold font-bold' : blocked ? 'text-[color:var(--color-line)] cursor-not-allowed line-through' : 'text-[color:var(--color-bone)] hover:bg-[color:var(--color-smoke)] border border-transparent hover:border-[color:var(--color-gold)]'}`}>
+                            {i + 1}
                           </button>
                         );
                       })}
                     </div>
-                  </>
+                    <p className="text-xs text-[color:var(--color-ash)] mt-5 text-center">{t.booking.pickDate}</p>
+                  </div>
                 )}
-              </div>
-            )}
 
-            {/* STEP 2 — INFO */}
-            {step === 2 && (
-              <div className="space-y-5">
-                <div className="luxe-card rounded-lg p-5 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                  <span className="flex items-center gap-2 text-[color:var(--color-bone)]"><Scissors size={15} className="text-[color:var(--color-gold)]"/> {sel.service?.title}</span>
-                  <span className="flex items-center gap-2 text-[color:var(--color-bone)]"><Calendar size={15} className="text-[color:var(--color-gold)]"/> {selDate}</span>
-                  <span className="flex items-center gap-2 text-[color:var(--color-bone)]"><Clock size={15} className="text-[color:var(--color-gold)]"/> {sel.time}</span>
-                </div>
-                <input value={info.name} onChange={e => setInfo({ ...info, name: e.target.value })} placeholder={`${t.common.name} *`} className="w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-4 py-3 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none" />
-                <input value={info.phone} onChange={e => setInfo({ ...info, phone: e.target.value })} placeholder={`${t.common.phone} *`} className="w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-4 py-3 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none" />
-                <input value={info.email} onChange={e => setInfo({ ...info, email: e.target.value })} placeholder={`${t.common.email} (${t.common.optional})`} className="w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-4 py-3 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none" />
-                <textarea value={info.notes} onChange={e => setInfo({ ...info, notes: e.target.value })} placeholder={`${t.common.notes} (${t.common.optional})`} rows={3} className="w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-4 py-3 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none resize-none" />
-                {!user && <p className="text-xs text-[color:var(--color-ash)] text-center">{t.auth.optional} <Link to="/login" className="text-[color:var(--color-gold)]">{t.auth.signin}</Link></p>}
-                {err && <p className="text-sm text-red-400 text-center">{err}</p>}
-              </div>
-            )}
+                {/* STEP 1 — TIME */}
+                {step === 1 && (
+                  <div>
+                    {availableSlots().length === 0 ? (
+                      <div className="luxe-card rounded-lg py-16 text-center"><Clock className="mx-auto text-[color:var(--color-line)] mb-3" size={40} /><p className="text-[color:var(--color-ash)]">{t.booking.noSlots}</p></div>
+                    ) : (
+                      <>
+                        <p className="text-center text-xs text-[color:var(--color-ash)] mb-5">{t.booking.onlyAvailable}</p>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                          {availableSlots().map(slot => {
+                            const active = sel.time === slot;
+                            return (
+                              <button key={slot} onClick={() => setSel({ ...sel, time: slot })}
+                                className={`py-3 rounded-md text-sm transition-colors ${active ? 'btn-gold font-semibold' : 'border border-[color:var(--color-line)] text-[color:var(--color-bone)] hover:border-[color:var(--color-gold)]'}`}>
+                                {slot}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* STEP 2 — INFO */}
+                {step === 2 && (
+                  <div className="space-y-5">
+                    <div className="luxe-card rounded-lg p-5 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                      <span className="flex items-center gap-2 text-[color:var(--color-bone)]"><Scissors size={15} className="text-[color:var(--color-gold)]"/> {sel.service?.title}</span>
+                      <span className="flex items-center gap-2 text-[color:var(--color-bone)]"><Calendar size={15} className="text-[color:var(--color-gold)]"/> {selDate}</span>
+                      <span className="flex items-center gap-2 text-[color:var(--color-bone)]"><Clock size={15} className="text-[color:var(--color-gold)]"/> {sel.time}</span>
+                    </div>
+                    <input value={info.name} onChange={e => setInfo({ ...info, name: e.target.value })} placeholder={`${t.common.name} *`} className="w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-4 py-3 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none" />
+                    <input value={info.phone} onChange={e => setInfo({ ...info, phone: e.target.value })} placeholder={`${t.common.phone} *`} className="w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-4 py-3 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none" />
+                    <input value={info.email} onChange={e => setInfo({ ...info, email: e.target.value })} placeholder={`${t.common.email} (${t.common.optional})`} className="w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-4 py-3 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none" />
+                    <textarea value={info.notes} onChange={e => setInfo({ ...info, notes: e.target.value })} placeholder={`${t.common.notes} (${t.common.optional})`} rows={3} className="w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-4 py-3 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none resize-none" />
+                    {!user && <p className="text-xs text-[color:var(--color-ash)] text-center">{t.auth.optional} <Link to="/login" className="text-[color:var(--color-gold)]">{t.auth.signin}</Link></p>}
+                    {err && <p className="text-sm text-red-400 text-center">{err}</p>}
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
 
             {/* NAV */}
             <div className="mt-8 flex items-center justify-between gap-4">
-              <button onClick={() => { if (step === 0) { setStep(null); setSel({ ...sel, time: null }); } else setStep(s => s - 1); }} className="inline-flex items-center gap-2 text-sm uppercase tracking-wider text-[color:var(--color-ash)] hover:text-[color:var(--color-bone)] transition">
+              <button onClick={() => { setStepDirection(-1); if (step === 0) { setStep(null); setSel({ ...sel, time: null }); } else setStep(s => s - 1); }} className="inline-flex items-center gap-2 text-sm uppercase tracking-wider text-[color:var(--color-ash)] hover:text-[color:var(--color-bone)] transition">
                 <ArrowLeft size={16} className={dir === 'rtl' ? 'rotate-180' : ''} /> {t.booking.back}
               </button>
               {step < 2 ? (
-                <button onClick={() => canNext && setStep(s => s + 1)} disabled={!canNext} className="inline-flex items-center gap-2 btn-gold px-8 py-3.5 rounded-sm text-sm font-semibold uppercase tracking-wider disabled:opacity-40 transition">
+                <button onClick={() => { setStepDirection(1); canNext && setStep(s => s + 1); }} disabled={!canNext} className="inline-flex items-center gap-2 btn-gold px-8 py-3.5 rounded-sm text-sm font-semibold uppercase tracking-wider disabled:opacity-40 transition">
                   {t.booking.next} <ArrowRight size={16} className={dir === 'rtl' ? 'rotate-180' : ''} />
                 </button>
               ) : (

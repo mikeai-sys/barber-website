@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Scissors, Clock, Tag, Calendar } from 'lucide-react';
+import { Scissors, Clock, Tag, Calendar, Search } from 'lucide-react';
 import { useLang } from '../contexts/LangContext';
 import Reveal from '../components/Reveal';
 import SectionTitle from '../components/SectionTitle';
@@ -11,6 +11,7 @@ export default function Services() {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cat, setCat] = useState('all');
+  const [query, setQuery] = useState('');
   useEffect(() => {
     supabase.from('services').select('*').order('sort_order', { ascending: true })
       .then(({ data }) => setServices(data || []))
@@ -19,7 +20,8 @@ export default function Services() {
   }, []);
 
   const cats = ['all', ...Array.from(new Set(services.map(s => s.category).filter(Boolean)))];
-  const filtered = cat === 'all' ? services : services.filter(s => s.category === cat);
+  const q = query.toLowerCase().trim();
+  const filtered = (cat === 'all' ? services : services.filter(s => s.category === cat)).filter(s => !q || s.title?.toLowerCase().includes(q) || s.description?.toLowerCase().includes(q));
 
   return (
     <div className="pt-[92px]">
@@ -27,6 +29,10 @@ export default function Services() {
         <SectionTitle overline={t.nav.services} title={t.nav.services} subtitle={t.sections.servicesSub} />
       </section>
       <section className="py-16 px-6 sm:px-8 max-w-7xl mx-auto">
+        <div className="max-w-md mx-auto mb-8 relative">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[color:var(--color-ash)]" />
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder={t.common.search} className="w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-full pl-11 pr-4 py-3 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none" />
+        </div>
         {cats.length > 1 && (
           <div className="flex flex-wrap gap-2 justify-center mb-12">
             {cats.map(c => (

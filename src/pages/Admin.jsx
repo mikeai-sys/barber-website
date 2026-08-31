@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Scissors, Sparkles, Image as ImageIcon, Star, FileText, Clock, LogOut, Plus, Trash2, Check, X, Loader2, Lock, ArrowLeft, Upload, Ban, Users, Bell, MessageCircle, Megaphone, Play, UserCog } from 'lucide-react';
+import { Calendar, Scissors, Sparkles, Image as ImageIcon, Star, FileText, Clock, LogOut, Plus, Trash2, Check, X, Loader2, Lock, ArrowLeft, Upload, Ban, Users, Bell, MessageCircle, Megaphone, Play, UserCog, ShoppingBag, Package } from 'lucide-react';
 import supabase from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLang } from '../contexts/LangContext';
+import { useToast } from '../contexts/ToastContext';
 import Logo from '../components/Logo';
 
-import { isAdminEmail } from '../lib/business';
+import { checkIsAdmin } from '../lib/business';
 
 async function upload(file) {
   const path = `media/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
@@ -34,6 +35,24 @@ export default function Admin() {
   const [tab, setTab] = useState('bookings');
   const [email, setEmail] = useState(''); const [pw, setPw] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [checkingAdmin, setCheckingAdmin] = useState(true);
+
+  // Check if user is admin from database
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (user?.email) {
+        const adminStatus = await checkIsAdmin(user.email);
+        setIsAdmin(adminStatus);
+        setCheckingAdmin(false);
+      } else {
+        setIsAdmin(false);
+        setCheckingAdmin(false);
+      }
+    };
+    checkAdminStatus();
+  }, [user]);
+
   const login = async (e) => {
     e.preventDefault(); setErr(''); setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
@@ -41,9 +60,9 @@ export default function Admin() {
     setBusy(false);
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[color:var(--color-ink)]"><Loader2 className="animate-spin text-[color:var(--color-gold)]" /></div>;
+  if (loading || checkingAdmin) return <div className="min-h-screen flex items-center justify-center bg-[color:var(--color-ink)]"><Loader2 className="animate-spin text-[color:var(--color-gold)]" /></div>;
 
-  if (!user || !isAdminEmail(user.email)) {
+  if (!user || !isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center px-6 bg-[color:var(--color-ink)]">
         <div className="luxe-card rounded-xl p-8 max-w-sm w-full">
@@ -53,7 +72,7 @@ export default function Admin() {
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder={t.auth.email} className="w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-4 py-3 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none" />
             <input type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder={t.auth.password} className="w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-4 py-3 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none" />
             {err && <p className="text-sm text-red-400">{err}</p>}
-            {user && !isAdminEmail(user.email) && <p className="text-xs text-red-400">Not authorized.</p>}
+            {user && !isAdmin && <p className="text-xs text-red-400">Not authorized.</p>}
             <button disabled={busy} className="w-full btn-gold py-3 rounded-sm text-sm font-semibold uppercase tracking-wider flex items-center justify-center gap-2">{busy && <Loader2 size={16} className="animate-spin" />} {t.auth.signin}</button>
           </form>
           <Link to="/" className="flex items-center justify-center gap-2 text-xs text-[color:var(--color-ash)] mt-5 hover:text-[color:var(--color-bone)]"><ArrowLeft size={13} /> {t.dashboard.backToSite}</Link>
@@ -66,7 +85,9 @@ export default function Admin() {
     { id: 'bookings', label: t.admin.bookings, icon: Calendar },
     { id: 'services', label: t.admin.services, icon: Scissors },
     { id: 'hairstyles', label: t.admin.hairstyles, icon: Sparkles },
-    { id: 'barbers', label: 'Team', icon: Users },
+    { id: 'products', label: t.admin.products, icon: ShoppingBag },
+    { id: 'orders', label: t.admin.orders, icon: Package },
+    { id: 'barbers', label: t.admin.team, icon: Users },
     { id: 'gallery', label: t.admin.gallery, icon: ImageIcon },
   ];
   const secondaryTabs = [
@@ -115,6 +136,8 @@ export default function Admin() {
         {tab === 'hairstyles' && <HairstylesTab />}
         {tab === 'barbers' && <BarbersTab />}
         {tab === 'gallery' && <GalleryTab />}
+        {tab === 'products' && <ProductsTab />}
+        {tab === 'orders' && <OrdersTab />}
         {tab === 'reviews' && <ReviewsTab />}
         {tab === 'content' && <ContentTab />}
         {tab === 'availability' && <AvailabilityTab />}
@@ -398,6 +421,7 @@ function ServicesTab() {
 
 function AdsTab() {
   const { t } = useLang();
+  const toast = useToast();
   const [ads, setAds] = useState([]);
   const [banners, setBanners] = useState([]);
   const [subTab, setSubTab] = useState('ads');
@@ -425,8 +449,11 @@ function AdsTab() {
     setAdForm(null); setSaving(false); loadAds();
   };
   const delAd = async (id) => {
-    await supabase.from('ads').delete().eq('id', id);
-    loadAds();
+    try {
+      const { error } = await supabase.rpc('delete_ad', { ad_id: id });
+      if (error) { toast(error.message, 'error'); return; }
+      loadAds();
+    } catch (e) { toast(e.message, 'error'); }
   };
   const toggleAd = async (id, is_active) => {
     await supabase.from('ads').update({ is_active }).eq('id', id);
@@ -486,8 +513,8 @@ function AdsTab() {
                   <span className="text-[11px] uppercase tracking-wide text-[color:var(--color-ash)]">{t.admin.description}</span>
                   <textarea value={adForm.description || ''} onChange={e => setAdForm({ ...adForm, description: e.target.value })} rows={2} className="mt-1 w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-3 py-2 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none resize-none" />
                 </label>
-                <UploadField label={t.admin.image} value={adForm.image_url} uploading={false} accept="image/*" onFile={async (file) => { if (!file) return; try { const url = await upload(file); setAdForm({ ...adForm, image_url: url }); } catch(e) { alert(e.message); } }} />
-                <UploadField label={t.admin.video} value={adForm.video_url} uploading={false} accept="video/*" isVideo onFile={async (file) => { if (!file) return; try { const url = await upload(file); setAdForm({ ...adForm, video_url: url }); } catch(e) { alert(e.message); } }} />
+                <UploadField label={t.admin.image} value={adForm.image_url} uploading={false} accept="image/*" onFile={async (file) => { if (!file) return; try { const url = await upload(file); setAdForm({ ...adForm, image_url: url }); } catch(e) { toast(e.message, 'error'); } }} />
+                <UploadField label={t.admin.video} value={adForm.video_url} uploading={false} accept="video/*" isVideo onFile={async (file) => { if (!file) return; try { const url = await upload(file); setAdForm({ ...adForm, video_url: url }); } catch(e) { toast(e.message, 'error'); } }} />
                 <label className="flex items-center gap-2 text-sm text-[color:var(--color-ash)] mt-2">
                   <input type="checkbox" checked={adForm.is_active !== false} onChange={e => setAdForm({ ...adForm, is_active: e.target.checked })} /> {t.admin.active}
                 </label>
@@ -539,7 +566,7 @@ function AdsTab() {
                 <Field label="Subtitle" value={bannerForm.subtitle || ''} onChange={e => setBannerForm({ ...bannerForm, subtitle: e.target.value })} />
                 <Field label={t.admin.linkUrl} value={bannerForm.link_url || ''} onChange={e => setBannerForm({ ...bannerForm, link_url: e.target.value })} />
                 <Field label={t.admin.sortOrder} value={bannerForm.sort_order || 0} type="number" onChange={e => setBannerForm({ ...bannerForm, sort_order: Number(e.target.value) })} />
-                <UploadField label={t.admin.image} value={bannerForm.image_url} uploading={false} accept="image/*" onFile={async (file) => { if (!file) return; try { const url = await upload(file); setBannerForm({ ...bannerForm, image_url: url }); } catch(e) { alert(e.message); } }} />
+                <UploadField label={t.admin.image} value={bannerForm.image_url} uploading={false} accept="image/*" onFile={async (file) => { if (!file) return; try { const url = await upload(file); setBannerForm({ ...bannerForm, image_url: url }); } catch(e) { toast(e.message, 'error'); } }} />
                 <label className="flex items-center gap-2 text-sm text-[color:var(--color-ash)] mt-2">
                   <input type="checkbox" checked={bannerForm.is_active !== false} onChange={e => setBannerForm({ ...bannerForm, is_active: e.target.checked })} /> {t.admin.active}
                 </label>
@@ -581,6 +608,7 @@ function AdsTab() {
 
 function HairstylesTab() {
   const { t } = useLang();
+  const toast = useToast();
   const [rows, setRows] = useState([]); const [form, setForm] = useState(null); const [saving, setSaving] = useState(false);
   const load = async () => {
     const { data } = await supabase.from('hairstyles').select('*').order('id', { ascending: true });
@@ -603,10 +631,10 @@ function HairstylesTab() {
     const payload = pick(form);
     if (form.id) {
       const { error } = await supabase.from('hairstyles').update(payload).eq('id', form.id);
-      if (error) { alert(`${t.dashboard.uploadError || 'Error'}: ${error.message}`); setSaving(false); return; }
+      if (error) { toast(`${t.dashboard.uploadError || 'Error'}: ${error.message}`, 'error'); setSaving(false); return; }
     } else {
       const { error } = await supabase.from('hairstyles').insert(payload);
-      if (error) { alert(`${t.dashboard.uploadError || 'Error'}: ${error.message}`); setSaving(false); return; }
+      if (error) { toast(`${t.dashboard.uploadError || 'Error'}: ${error.message}`, 'error'); setSaving(false); return; }
     }
     setForm(null); setSaving(false); load();
   };
@@ -638,8 +666,8 @@ function HairstylesTab() {
             <Field label={t.admin.duration} placeholder="ex: 30" value={form.duration || ''} type="number" onChange={e => setForm({ ...form, duration: e.target.value ? Number(e.target.value) : '' })} />
             <Field label={t.admin.difficulty} placeholder="Facile / Moyen / Avancé" value={form.difficulty || ''} onChange={e => setForm({ ...form, difficulty: e.target.value })} />
             <label className="block sm:col-span-2"><span className="text-[11px] uppercase tracking-wide text-[color:var(--color-ash)]">{t.admin.description}</span><textarea value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} placeholder={t.admin.description} className="mt-1 w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-3 py-2 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none resize-none" /></label>
-            <UploadField label={t.admin.image} value={form.image_url} uploading={false} accept="image/*" onFile={async (file) => { if (!file) return; try { const url = await upload(file); setForm({ ...form, image_url: url }); } catch(e) { alert(e.message); } }} />
-            <UploadField label={`${t.admin.video} (${t.common.optional})`} value={form.video_url} uploading={false} accept="video/*" isVideo onFile={async (file) => { if (!file) return; try { const url = await upload(file); setForm({ ...form, video_url: url }); } catch(e) { alert(e.message); } }} />
+            <UploadField label={t.admin.image} value={form.image_url} uploading={false} accept="image/*" onFile={async (file) => { if (!file) return; try { const url = await upload(file); setForm({ ...form, image_url: url }); } catch(e) { toast(e.message, 'error'); } }} />
+            <UploadField label={`${t.admin.video} (${t.common.optional})`} value={form.video_url} uploading={false} accept="video/*" isVideo onFile={async (file) => { if (!file) return; try { const url = await upload(file); setForm({ ...form, video_url: url }); } catch(e) { toast(e.message, 'error'); } }} />
           </div>
           <div className="flex gap-3 mt-4">
             <button onClick={save} disabled={saving || !form.name} className="btn-gold px-5 py-2 rounded-sm text-xs font-semibold uppercase tracking-wider flex items-center gap-2 disabled:opacity-50">{saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} {t.admin.save}</button>
@@ -679,8 +707,9 @@ function HairstylesTab() {
 
 function ItemForm({ form, setForm, save, saving, fields, nameKey, hasImage, hasVideo, hasDesc, hasAvailable, hasPhoto, hasBio }) {
   const { t } = useLang();
+  const toast = useToast();
   const [uploading, setUploading] = useState('');
-  const onUpload = async (key, file) => { if (!file) return; setUploading(key); try { const url = await upload(file); setForm({ ...form, [key]: url }); } catch (e) { alert(e.message); } setUploading(''); };
+  const onUpload = async (key, file) => { if (!file) return; setUploading(key); try { const url = await upload(file); setForm({ ...form, [key]: url }); } catch (e) { toast(e.message, 'error'); } setUploading(''); };
   return (
     <div className="luxe-card rounded-lg p-5 mb-4">
       <div className="grid sm:grid-cols-2 gap-3">
@@ -717,6 +746,7 @@ function UploadField({ label, value, uploading, accept, onFile, isVideo }) {
 
 function GalleryTab() {
   const { t } = useLang();
+  const toast = useToast();
   const [rows, setRows] = useState([]); const [category, setCategory] = useState(''); const [uploading, setUploading] = useState(false);
   const load = async () => {
     let q = supabase.from('gallery').select('*').order('sort_order', { ascending: true });
@@ -730,7 +760,8 @@ function GalleryTab() {
     load();
   };
   const del = async (id) => {
-    await supabase.from('gallery').delete().eq('id', id);
+    const { error } = await supabase.from('gallery').delete().eq('id', id);
+    if (error) { toast(error.message, 'error'); return; }
     load();
   };
   return (
@@ -738,7 +769,7 @@ function GalleryTab() {
       <Header title={t.admin.gallery}>
         <div className="flex items-center gap-2">
           <input value={category} onChange={e => setCategory(e.target.value)} placeholder={`${t.admin.category} (${t.common.optional})`} className="bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-3 py-2 text-xs text-[color:var(--color-bone)] outline-none" />
-          <label className="cursor-pointer inline-flex items-center gap-2 btn-gold px-4 py-2 rounded-sm text-xs font-semibold uppercase tracking-wider">{uploading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={15} />} {t.admin.add}<input type="file" accept="image/*,video/*" className="hidden" onChange={async (e) => { const file = e.target.files[0]; if (!file) return; setUploading(true); try { const url = await upload(file); const type = file.type.startsWith('video') ? 'video' : 'image'; await add(url, type); } catch (err) { alert(err.message); } setUploading(false); }} /></label>
+          <label className="cursor-pointer inline-flex items-center gap-2 btn-gold px-4 py-2 rounded-sm text-xs font-semibold uppercase tracking-wider">{uploading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={15} />} {t.admin.add}<input type="file" accept="image/*,video/*" className="hidden" onChange={async (e) => { const file = e.target.files[0]; if (!file) return; setUploading(true); try { const url = await upload(file); const type = file.type.startsWith('video') ? 'video' : 'image'; await add(url, type); } catch (err) { toast(err.message, 'error'); } setUploading(false); }} /></label>
         </div>
       </Header>
       {rows.length === 0 ? <Empty text={t.common.empty} /> : (
@@ -746,7 +777,7 @@ function GalleryTab() {
           {rows.map(g => (
             <div key={g.id} className="relative group rounded-lg overflow-hidden aspect-square bg-[color:var(--color-smoke)]">
               {g.type === 'video' ? <video src={g.url} className="w-full h-full object-cover" /> : <img src={g.url} alt="" className="w-full h-full object-cover" />}
-              <button onClick={() => del(g.id)} className="absolute top-2 right-2 w-8 h-8 rounded-full bg-[color:var(--color-ink)]/80 flex items-center justify-center text-red-400 opacity-0 group-hover:opacity-100 transition"><Trash2 size={15} /></button>
+              <button onClick={() => del(g.id)} className="absolute top-2 right-2 w-8 h-8 rounded-full bg-[color:var(--color-ink)]/80 flex items-center justify-center text-red-400 hover:bg-red-500/20 transition"><Trash2 size={15} /></button>
             </div>
           ))}
         </div>
@@ -797,6 +828,7 @@ function ReviewsTab() {
 
 function BarbersTab() {
   const { t } = useLang();
+  const toast = useToast();
   const [rows, setRows] = useState([]); const [form, setForm] = useState(null); const [saving, setSaving] = useState(false);
   const load = async () => {
     const { data } = await supabase.from('barbers').select('*').order('sort_order', { ascending: true }).order('id', { ascending: true });
@@ -806,12 +838,15 @@ function BarbersTab() {
   const blank = { name: '', role: '', bio: '', photo_url: '', instagram: '', sort_order: 0 };
   const save = async () => {
     setSaving(true);
-    if (form.id) {
-      await supabase.from('barbers').update(form).eq('id', form.id);
-    } else {
-      await supabase.from('barbers').insert(form);
-    }
-    setForm(null); setSaving(false); load();
+    try {
+      if (form.id) {
+        await supabase.from('barbers').update(form).eq('id', form.id);
+      } else {
+        await supabase.from('barbers').insert(form);
+      }
+      setForm(null); load();
+    } catch (err) { toast(err.message, 'error'); }
+    setSaving(false);
   };
   const del = async (id) => {
     await supabase.from('barbers').delete().eq('id', id);
@@ -820,7 +855,7 @@ function BarbersTab() {
   return (
     <div>
       <Header title={t.admin.barber || 'Team'}><button onClick={() => setForm(blank)} className="inline-flex items-center gap-2 btn-gold px-4 py-2 rounded-sm text-xs font-semibold uppercase tracking-wider"><Plus size={15} /> {t.admin.add}</button></Header>
-      {form && <ItemForm form={form} setForm={setForm} save={save} saving={saving} nameKey="name" fields={[[' name',t.common.name || 'Name'],['role','Role / Title'],['instagram','Instagram URL']]} hasPhoto hasBio />}
+      {form && <ItemForm form={form} setForm={setForm} save={save} saving={saving} fields={[['name',t.common.name || 'Name'],['role','Role / Title'],['instagram','Instagram URL']]} hasPhoto hasBio />}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
         {rows.map(b => (
           <div key={b.id} className="luxe-card rounded-lg overflow-hidden">
@@ -849,6 +884,7 @@ function ContentTab() {
     });
   }, []);
   const keys = [
+    ['hero_image', 'Hero Background Image URL'], ['barber_photo', 'Barber Photo URL (Instagram profile)'],
     ['about_story', `${t.about.story}`], ['about_bio', `${t.about.bio}`], ['about_experience', `${t.about.experience}`],
     ['about_mission', `${t.about.mission}`], ['about_vision', `${t.about.vision}`], ['email', `${t.common.email}`],
     ['spline_scene', 'Spline 3D Scene URL (.splinecode)'],
@@ -944,6 +980,391 @@ function AvailabilityTab() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ProductsTab() {
+  const { t } = useLang();
+  const toast = useToast();
+  const [rows, setRows] = useState([]); const [form, setForm] = useState(null); const [saving, setSaving] = useState(false);
+  const load = async () => {
+    const { data } = await supabase.from('products').select('*').order('sort_order', { ascending: true }).order('id', { ascending: true });
+    setRows(data || []);
+  };
+  useEffect(() => { load(); }, []);
+  const blank = { name: '', description: '', price: '', category: '', image_url: '', video_url: '', stock: 0, available: true, sort_order: 0 };
+  const clean = (body) => {
+    const out = { ...body };
+    ['price', 'stock', 'sort_order'].forEach(k => {
+      if (out[k] === '' || out[k] === undefined) out[k] = null;
+      else if (out[k] !== null) out[k] = Number(out[k]);
+    });
+    return out;
+  };
+  const save = async () => {
+    setSaving(true);
+    const body = clean(form);
+    if (form.id) {
+      await supabase.from('products').update(body).eq('id', form.id);
+    } else {
+      await supabase.from('products').insert(body);
+    }
+    setForm(null); setSaving(false); load();
+  };
+  const del = async (id) => {
+    if (!confirm(t.admin.confirmDelete)) return;
+    await supabase.from('products').delete().eq('id', id);
+    load();
+  };
+  return (
+    <div>
+      <Header title={t.admin.products}><button onClick={() => setForm(blank)} className="inline-flex items-center gap-2 btn-gold px-4 py-2 rounded-sm text-xs font-semibold uppercase tracking-wider"><Plus size={15} /> {t.admin.add}</button></Header>
+      {form && (
+        <div className="luxe-card rounded-lg p-5 mb-4">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label={t.admin.title} value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} />
+            <Field label={t.admin.category} value={form.category || ''} onChange={e => setForm({ ...form, category: e.target.value })} />
+            <Field label={t.admin.price} value={form.price || ''} type="number" onChange={e => setForm({ ...form, price: e.target.value ? Number(e.target.value) : '' })} />
+            <Field label={t.admin.stock} value={form.stock ?? 0} type="number" onChange={e => setForm({ ...form, stock: e.target.value ? Number(e.target.value) : 0 })} />
+            <Field label={t.admin.sortOrder} value={form.sort_order ?? 0} type="number" onChange={e => setForm({ ...form, sort_order: Number(e.target.value) })} />
+            <label className="block sm:col-span-2">
+              <span className="text-[11px] uppercase tracking-wide text-[color:var(--color-ash)]">{t.admin.description}</span>
+              <textarea value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} className="mt-1 w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-3 py-2 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none resize-none" />
+            </label>
+            <UploadField label={t.admin.image} value={form.image_url} uploading={false} accept="image/*" onFile={async (file) => { if (!file) return; try { const url = await upload(file); setForm({ ...form, image_url: url }); } catch(e) { toast(e.message, 'error'); } }} />
+            <UploadField label={`${t.admin.video} (${t.common.optional})`} value={form.video_url} uploading={false} accept="video/*" isVideo onFile={async (file) => { if (!file) return; try { const url = await upload(file); setForm({ ...form, video_url: url }); } catch(e) { toast(e.message, 'error'); } }} />
+            <label className="flex items-center gap-2 text-sm text-[color:var(--color-ash)] mt-2">
+              <input type="checkbox" checked={form.available !== false} onChange={e => setForm({ ...form, available: e.target.checked })} /> {t.admin.available}
+            </label>
+          </div>
+          <div className="flex gap-3 mt-4">
+            <button onClick={save} disabled={saving} className="btn-gold px-5 py-2 rounded-sm text-xs font-semibold uppercase tracking-wider flex items-center gap-2">{saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} {t.admin.save}</button>
+            <button onClick={() => setForm(null)} className="border border-[color:var(--color-line)] text-[color:var(--color-ash)] px-5 py-2 rounded-sm text-xs uppercase tracking-wider">{t.dashboard.mfaCancel}</button>
+          </div>
+        </div>
+      )}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+        {rows.map(p => (
+          <div key={p.id} className="luxe-card rounded-lg overflow-hidden">
+            {p.image_url && <img src={p.image_url} alt="" className="w-full aspect-video object-cover" />}
+            <div className="p-4">
+              <div className="flex justify-between items-start">
+                <h3 className="font-medium text-[color:var(--color-bone)]">{p.name}</h3>
+                <span className="text-xs text-[color:var(--color-gold)]">{p.price ? `${p.price} DA` : '—'}</span>
+              </div>
+              <p className="text-xs text-[color:var(--color-ash)] mt-1 line-clamp-2">{p.description}</p>
+              <div className="flex items-center gap-2 mt-2 text-xs text-[color:var(--color-ash)]">
+                <span>{t.admin.stock}: {p.stock ?? 0}</span>
+                {p.available === false && <span className="text-red-400">{t.store.outStock}</span>}
+              </div>
+              <div className="flex gap-2 mt-3"><button onClick={() => setForm(p)} className="text-xs text-[color:var(--color-gold)]">{t.admin.edit}</button><button onClick={() => del(p.id)} className="text-xs text-red-400">{t.admin.delete}</button></div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {rows.length === 0 && !form && <Empty text={t.admin.noProducts} />}
+    </div>
+  );
+}
+
+const ORDER_STATUS_STYLE = {
+  pending: 'bg-[color:var(--color-gold)]/10 text-[color:var(--color-gold)]',
+  confirmed: 'bg-blue-500/15 text-blue-300',
+  completed: 'bg-green-500/10 text-green-400',
+  cancelled: 'bg-red-500/10 text-red-400',
+};
+
+function OrdersTab() {
+  const { t } = useLang();
+  const [rows, setRows] = useState([]); const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState('pending');
+  const load = async () => {
+    const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    setRows(data || []);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+  const setStatus = async (id, status) => {
+    await supabase.from('orders').update({ status }).eq('id', id);
+    load();
+  };
+  const del = async (id) => {
+    if (!confirm(t.admin.confirmDelete)) return;
+    await supabase.from('orders').delete().eq('id', id);
+    load();
+  };
+  if (loading) return <Loader2 className="animate-spin text-[color:var(--color-gold)]" />;
+
+  const pending = rows.filter(o => o.status === 'pending');
+  const confirmed = rows.filter(o => o.status === 'confirmed');
+  const completed = rows.filter(o => o.status === 'completed');
+  const cancelled = rows.filter(o => o.status === 'cancelled');
+  const list = tab === 'pending' ? pending : tab === 'confirmed' ? confirmed : tab === 'completed' ? completed : cancelled;
+
+  return (
+    <div>
+      <Header title={t.admin.orders} />
+      <div className="inline-flex p-1 rounded-full border border-[color:var(--color-line)] bg-[color:var(--color-smoke)] mb-6 overflow-x-auto">
+        {[['pending', `${t.admin.orderPending} (${pending.length})`], ['confirmed', `${t.admin.orderConfirmed} (${confirmed.length})`], ['completed', `${t.admin.orderCompleted} (${completed.length})`], ['cancelled', `${t.admin.orderCancelled} (${cancelled.length})`]].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} className={`px-4 py-2 rounded-full text-xs uppercase tracking-wider transition-colors whitespace-nowrap ${tab === id ? 'btn-gold font-semibold' : 'text-[color:var(--color-ash)]'}`}>{label}</button>
+        ))}
+      </div>
+      {list.length === 0 ? <Empty text={t.admin.noOrders} /> : (
+        <div className="space-y-3">
+          {list.map(o => (
+            <div key={o.id} className="luxe-card rounded-lg p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-medium text-[color:var(--color-bone)]">{o.customer_name} <span className="text-[color:var(--color-ash)] text-sm">· {o.customer_phone}</span></div>
+                  <div className="text-sm text-[color:var(--color-ash)]">{t.booking.ref}: <span className="font-mono text-[color:var(--color-gold)]">{o.reference}</span> · {t.store.total}: <span className="text-[color:var(--color-bone)]">{o.total} DA</span></div>
+                  {o.items && Array.isArray(o.items) && (
+                    <div className="text-xs text-[color:var(--color-ash)]/70 mt-1">{o.items.map(i => i.name || 'Item').join(', ')}</div>
+                  )}
+                  {o.address && <div className="text-xs text-[color:var(--color-ash)]/70 mt-1">📍 {o.address}</div>}
+                  {o.notes && <div className="text-xs text-[color:var(--color-ash)]/70 mt-1 italic">{o.notes}</div>}
+                </div>
+                <span className={`text-[10px] uppercase px-2 py-1 rounded-full shrink-0 ${ORDER_STATUS_STYLE[o.status] || ''}`}>{t.admin[`order${o.status.charAt(0).toUpperCase() + o.status.slice(1)}`] || o.status}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-[color:var(--color-line)]">
+                {o.status === 'pending' && (
+                  <button onClick={() => setStatus(o.id, 'confirmed')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-blue-400/40 text-blue-300 text-xs font-semibold uppercase tracking-wider hover:bg-blue-400/10 transition"><Check size={13} /> {t.admin.orderConfirmed}</button>
+                )}
+                {(o.status === 'pending' || o.status === 'confirmed') && (
+                  <button onClick={() => setStatus(o.id, 'completed')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-green-500/15 text-green-300 text-xs font-semibold uppercase tracking-wider hover:bg-green-500/25 transition"><Check size={13} /> {t.admin.orderCompleted}</button>
+                )}
+                {o.status !== 'cancelled' && o.status !== 'completed' && (
+                  <button onClick={() => setStatus(o.id, 'cancelled')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-[color:var(--color-line)] text-red-400 text-xs uppercase tracking-wider hover:border-red-400 transition"><X size={13} /> {t.admin.orderCancelled}</button>
+                )}
+                {(o.status === 'completed' || o.status === 'cancelled') && (
+                  <button onClick={() => setStatus(o.id, 'pending')} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-[color:var(--color-line)] text-[color:var(--color-ash)] text-xs uppercase tracking-wider hover:text-[color:var(--color-bone)] transition">{t.admin.reopen}</button>
+                )}
+                <button onClick={() => del(o.id)} className="ml-auto w-8 h-8 rounded-md border border-[color:var(--color-line)] flex items-center justify-center text-[color:var(--color-ash)] hover:text-red-400"><Trash2 size={15} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UsersTab() {
+  const { t } = useLang();
+  const [admins, setAdmins] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
+  const [addError, setAddError] = useState('');
+
+  const loadAdmins = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('admin_users')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.warn('Load admins error:', error.message);
+        setAdmins([]);
+      } else {
+        setAdmins(data || []);
+      }
+    } catch (err) {
+      console.warn('Load admins exception:', err);
+      setAdmins([]);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadAdmins();
+  }, []);
+
+  const searchUsers = async (query) => {
+    if (!query || query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setSearching(true);
+    try {
+      // Search in bookings for customer emails
+      const { data: bookings } = await supabase
+        .from('bookings')
+        .select('customer_email')
+        .ilike('customer_email', `%${query}%`)
+        .limit(10);
+      
+      const emails = new Set();
+      (bookings || []).forEach(b => b.customer_email && emails.add(b.customer_email));
+
+      // Try profiles table if it exists
+      try {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('email')
+          .ilike('email', `%${query}%`)
+          .limit(10);
+        (profiles || []).forEach(p => p.email && emails.add(p.email));
+      } catch {
+        // Profiles table might not exist, ignore
+      }
+
+      const results = Array.from(emails).map(email => ({ email }));
+      
+      // Filter out existing admins
+      const adminEmails = new Set(admins.map(a => a.email));
+      setSearchResults(results.filter(r => !adminEmails.has(r.email)));
+    } catch (err) {
+      console.warn('Search error:', err);
+    }
+    setSearching(false);
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchUsers(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, admins]);
+
+  const addAdmin = async (email) => {
+    const clean = email.toLowerCase().trim();
+    if (!clean.includes('@')) { setAddError('Invalid email'); return; }
+    setAddError('');
+    try {
+      const { data, error } = await supabase.rpc('add_admin', { target_email: clean });
+      if (!error && !data?.error) {
+        setSearchQuery(''); setSearchResults([]); loadAdmins(); return;
+      }
+      const msg = error?.message || data?.error || '';
+      if (msg && !msg.includes('not found')) {
+        if (msg.includes('Unauthorized') || msg.includes('admin')) { setAddError(msg); return; }
+      }
+      const { error: insErr } = await supabase.from('admin_users').insert({ email: clean, is_admin: true });
+      if (insErr) setAddError(insErr.message);
+      else { setSearchQuery(''); setSearchResults([]); loadAdmins(); }
+    } catch (err) {
+      setAddError(err.message);
+    }
+  };
+
+  const removeAdmin = async (id) => {
+    if (!confirm('Remove admin privileges?')) return;
+    try {
+      const { data, error } = await supabase.rpc('remove_admin', { target_id: id });
+      if (!error && !data?.error) { loadAdmins(); return; }
+      const { error: delErr } = await supabase.from('admin_users').delete().eq('id', id);
+      if (delErr) alert(delErr.message);
+      else loadAdmins();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  return (
+    <div>
+      <Header title={t.admin.users} />
+      
+      {/* Add Admin Section */}
+      <div className="luxe-card rounded-lg p-5 mb-6">
+        <h3 className="text-sm font-medium text-[color:var(--color-bone)] mb-3">{t.admin.addAdminUser}</h3>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <input
+              type="email"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder={t.admin.searchUsers}
+              className="w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-md px-4 py-3 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none"
+            />
+            {searching && (
+              <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[color:var(--color-ash)]" />
+            )}
+          </div>
+          <button
+            onClick={() => {
+              if (searchQuery && searchQuery.includes('@')) {
+                addAdmin(searchQuery);
+              }
+            }}
+            className="btn-gold px-4 py-2 rounded-sm text-xs font-semibold uppercase tracking-wider whitespace-nowrap"
+          >
+            {t.admin.add}
+          </button>
+        </div>
+        
+        {addError && (
+          <p className="text-xs text-red-400 mt-2">{addError}</p>
+        )}
+
+        {/* Search Results */}
+        {searchResults.length > 0 && (
+          <div className="mt-3 border border-[color:var(--color-line)] rounded-md overflow-hidden">
+            {searchResults.map((user, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between px-3 py-2 hover:bg-[color:var(--color-smoke)] border-b border-[color:var(--color-line)] last:border-b-0"
+              >
+                <span className="text-sm text-[color:var(--color-bone)]">{user.email}</span>
+                <button
+                  onClick={() => addAdmin(user.email)}
+                  className="text-xs text-[color:var(--color-gold)] hover:underline"
+                >
+                  {t.admin.makeAdmin}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Admin Users List */}
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="animate-spin text-[color:var(--color-gold)]" />
+        </div>
+      ) : admins.length === 0 ? (
+        <Empty text={t.admin.noUsers} />
+      ) : (
+        <div className="space-y-3">
+          {admins.map(admin => (
+            <div key={admin.id} className="luxe-card rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-full bg-[color:var(--color-gold)]/10 flex items-center justify-center shrink-0">
+                  {admin.is_admin ? (
+                    <UserCog size={18} className="text-[color:var(--color-gold)]" />
+                  ) : (
+                    <Users size={18} className="text-[color:var(--color-ash)]" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-medium text-[color:var(--color-bone)] truncate">{admin.email}</div>
+                  <div className="text-xs text-[color:var(--color-ash)]">
+                    {t.admin.adminSince}: {new Date(admin.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] uppercase px-2 py-1 rounded-full ${admin.is_admin ? 'bg-green-500/10 text-green-400' : 'bg-[color:var(--color-line)] text-[color:var(--color-ash)]'}`}>
+                  {admin.is_admin ? t.admin.active : 'User'}
+                </span>
+                {admin.is_admin && admins.length > 1 && (
+                  <button
+                    onClick={() => removeAdmin(admin.id)}
+                    className="text-xs text-red-400 hover:underline"
+                  >
+                    {t.admin.removeAdmin}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

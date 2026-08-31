@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ShoppingBag, Plus, Minus, X, Trash2, Check, Loader2, Play, ShoppingCart, MessageCircle } from 'lucide-react';
+import { ShoppingBag, Plus, Minus, X, Trash2, Check, Loader2, Play, ShoppingCart, MessageCircle, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLang } from '../contexts/LangContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,6 +14,7 @@ export default function Store() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cat, setCat] = useState('all');
+  const [query, setQuery] = useState('');
   const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkout, setCheckout] = useState(false);
@@ -33,7 +34,8 @@ export default function Store() {
   }, [user]);
 
   const cats = ['all', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
-  const filtered = cat === 'all' ? products : products.filter(p => p.category === cat);
+  const q = query.toLowerCase().trim();
+  const filtered = (cat === 'all' ? products : products.filter(p => p.category === cat)).filter(p => !q || p.name?.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q));
 
   const add = (p) => {
     setCart(c => {
@@ -48,19 +50,20 @@ export default function Store() {
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const count = cart.reduce((s, i) => s + i.qty, 0);
 
+  const genRef = () => 'CMD-' + Math.random().toString(36).slice(2, 7).toUpperCase();
+
   const placeOrder = async () => {
     setErr('');
     if (!info.name.trim() || !info.phone.trim()) { setErr(t.common.name + ' + ' + t.common.phone); return; }
     setSubmitting(true);
     try {
       const { data, error } = await supabase.from('orders').insert({
-        customer_name: info.name, customer_phone: info.phone, customer_email: info.email, address: info.address, notes: info.notes,
+        reference: genRef(), customer_name: info.name, customer_phone: info.phone, customer_email: info.email, address: info.address, notes: info.notes,
         items: cart, total, user_id: user?.id || null,
       }).select().single();
       if (!error) {
         const full = { ...data, items: data.items || cart };
         setDone(full); setCart([]);
-        openWhatsApp(orderWhatsApp(full, lang));
       }
       else setErr(error.message || 'Error');
     } catch { setErr('Error'); } finally { setSubmitting(false); }
@@ -73,6 +76,10 @@ export default function Store() {
       </section>
 
       <section className="py-14 px-6 sm:px-8 max-w-7xl mx-auto">
+        <div className="max-w-md mx-auto mb-8 relative">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[color:var(--color-ash)]" />
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder={t.common.search} className="w-full bg-[color:var(--color-smoke)] border border-[color:var(--color-line)] rounded-full pl-11 pr-4 py-3 text-sm text-[color:var(--color-bone)] focus:border-[color:var(--color-gold)] outline-none" />
+        </div>
         {cats.length > 1 && (
           <div className="flex flex-wrap gap-2 justify-center mb-12">
             {cats.map(c => (

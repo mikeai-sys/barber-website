@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Calendar, Scissors, ArrowRight, ArrowUpRight, Star, Sparkles, ShieldCheck, Award, Heart, Instagram, Facebook, Music2, MapPin, Phone } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { motion, useScroll, useTransform } from 'framer-motion';
 import { useLang } from '../contexts/LangContext';
 import { BUSINESS } from '../lib/business';
 import Reveal from '../components/Reveal';
@@ -39,26 +40,42 @@ export default function Home() {
       const m = {}; (data || []).forEach(r => m[r.key] = r.value); setContent(m);
     }).catch(() => {});
   }, []);
-  const heroImg = content.hero_image || '/hero.jpg';
-  const barberImg = content.barber_photo || '/barber-portrait.png';
+  const heroImg = content.hero_image || null;
+  const barberImg = content.barber_photo || null;
 
   const featured = hairstyles.slice(0, 6);
   const popServices = services.slice(0, 4);
+
+  // Parallax for hero
+  const { scrollY } = useScroll();
+  const bgY = useTransform(scrollY, [0, 600], [0, 120]);
+  const bgScale = useTransform(scrollY, [0, 600], [1, 1.1]);
 
   return (
     <div className="overflow-hidden">
       {/* ============ HERO ============ */}
       <section className="relative min-h-screen flex items-center overflow-hidden">
-        <div className="absolute inset-0">
-          <img src={heroImg} alt="" className="w-full h-full object-cover opacity-25" />
+        {/* Parallax background */}
+        <motion.div className="absolute inset-0" style={{ y: bgY, scale: bgScale }}>
+          {heroImg && <img src={heroImg} alt="" className="w-full h-full object-cover opacity-40" />}
           <div className="absolute inset-0 bg-gradient-to-br from-[color:var(--color-ink)] via-[color:var(--color-ink)]/85 to-[color:var(--color-ink)]/70" />
-        </div>
+        </motion.div>
 
-        {/* Floating scissors */}
-        <img
-          src="/scissors.png" alt=""
-          className="floaty pointer-events-none absolute z-0 hidden sm:block sm:top-1/2 sm:-translate-y-1/2 sm:w-[28rem] lg:w-[32rem] drop-shadow-[0_35px_70px_rgba(201,162,75,0.4)] opacity-30 sm:opacity-80 ltr:right-[2%] rtl:left-[2%] rtl:scale-x-[-1]"
-        />
+        {/* Decorative floating sparkles */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {[...Array(6)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 bg-[color:var(--color-gold)] rounded-full opacity-20"
+              style={{
+                top: `${15 + i * 14}%`,
+                left: `${10 + i * 16}%`,
+                animation: `floaty ${4 + i * 1.5}s ease-in-out infinite`,
+                animationDelay: `${i * 0.6}s`,
+              }}
+            />
+          ))}
+        </div>
 
         <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-10 w-full pt-28 pb-20">
           <div className="max-w-3xl">
@@ -70,7 +87,8 @@ export default function Home() {
               <span className="block paint-heading pb-2" style={{ fontFamily: 'var(--font-hand)', fontSize: '1.15em' }}>{t.hero.title2}</span>
             </h1>
             <p className="mt-8 max-w-lg text-[color:var(--color-ash)] text-lg leading-relaxed text-left rtl:text-right">{t.hero.sub}</p>
-            <div className="mt-11 flex flex-col sm:flex-row gap-4">
+
+            <div className="mt-10 flex flex-col sm:flex-row gap-4">
               <Link to="/book" className="btn-3d inline-flex items-center justify-center gap-2 px-9 py-4 text-sm font-bold uppercase tracking-wider">
                 <Calendar size={17} /> {t.hero.book}
               </Link>
@@ -98,7 +116,7 @@ export default function Home() {
             <Link to="/book" className="btn-3d inline-flex items-center gap-2 mt-8 px-8 py-3.5 text-sm font-bold uppercase tracking-wider"><Calendar size={16} /> {t.hero.book}</Link>
           </div>
           <div className="order-1 lg:order-2 relative flex justify-center">
-            <img src="/salon-3d.png" alt="Salon" className="relative z-10 w-full max-w-xl drop-shadow-[0_50px_80px_rgba(0,0,0,0.8)]" />
+            <img src="/salon-3d.png" alt="Salon" onError={e => e.target.style.display = 'none'} className="relative z-10 w-full max-w-xl drop-shadow-[0_50px_80px_rgba(0,0,0,0.8)]" />
           </div>
         </div>
       </section>
@@ -182,12 +200,12 @@ export default function Home() {
           <PaintTitle overline={t.sections.why} title={t.sections.why} className="mb-3" />
           <p className="text-[color:var(--color-ash)] mb-12">{t.sections.whySub}</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              { icon: Award, title: t.why.craft, d: t.why.craftD },
-              { icon: ShieldCheck, title: t.why.hygiene, d: t.why.hygieneD },
-              { icon: Sparkles, title: t.why.style, d: t.why.styleD },
-              { icon: Heart, title: t.why.welcome, d: t.why.welcomeD },
-            ].map((w, i) => (
+              {[
+                { icon: Award, title: t.why.craft, d: t.why.craftD },
+                { icon: ShieldCheck, title: t.why.hygiene, d: t.why.hygieneD },
+                { icon: Sparkles, title: t.why.style, d: t.why.styleD },
+                { icon: Heart, title: t.why.welcome, d: t.why.welcomeD },
+              ].map((w, i) => (
               <Reveal key={i} delay={i * 0.08}>
                 <div className="glass-card rounded-lg p-7 h-full">
                   <div className="w-14 h-14 rounded-full border border-[color:var(--color-gold)]/30 flex items-center justify-center mb-5"><w.icon size={22} className="text-[color:var(--color-gold)]" /></div>
@@ -235,8 +253,7 @@ export default function Home() {
               <div className="relative w-28 h-28 mx-auto mb-5">
                 <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-[color:var(--color-gold)] via-[#f4e4b0] to-[color:var(--color-gold)] p-[3px]">
                   <div className="w-full h-full rounded-full overflow-hidden bg-[color:var(--color-graphite)] flex items-center justify-center">
-                    <img src={barberImg} alt={BUSINESS.owner} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }} />
-                    <div style={{ display: 'none' }} className="w-full h-full items-center justify-center font-display text-4xl font-bold text-[color:var(--color-gold)]">H</div>
+                    <img src="https://vcoukinlerisnlpfauxy.supabase.co/storage/v1/object/public/media/IMG_20260729_223802.jpg" alt={BUSINESS.owner} className="w-full h-full object-cover" />
                   </div>
                 </div>
               </div>
@@ -261,7 +278,7 @@ export default function Home() {
 
       {/* ============ CTA ============ */}
       <section className="relative py-28 px-6 overflow-hidden border-t border-[color:var(--color-line)]">
-        <img src="/scissors.png" alt="" className="floaty pointer-events-none absolute ltr:-right-10 rtl:-left-10 top-1/2 -translate-y-1/2 w-72 opacity-20 rotate-45 hidden sm:block" />
+
         <Reveal className="relative max-w-3xl mx-auto text-center">
           <h2 className="paint-heading text-5xl sm:text-6xl font-bold leading-tight">{t.footer.legal}</h2>
           <Link to="/book" className="btn-3d inline-flex items-center gap-2 mt-9 px-10 py-4 text-sm font-bold uppercase tracking-wider">
