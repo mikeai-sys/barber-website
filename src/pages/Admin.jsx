@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLang } from '../contexts/LangContext';
 import { useToast } from '../contexts/ToastContext';
 import Logo from '../components/Logo';
+import MFAChallenge from '../components/MFAChallenge';
 
 import { checkIsAdmin } from '../lib/business';
 
@@ -31,7 +32,7 @@ function Field({ label, ...props }) {
 
 export default function Admin() {
   const { t } = useLang();
-  const { user, loading } = useAuth();
+  const { user, loading, needsMFA, mfaLoading, refreshMFA } = useAuth();
   const [tab, setTab] = useState('bookings');
   const [email, setEmail] = useState(''); const [pw, setPw] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -59,7 +60,8 @@ export default function Admin() {
     setBusy(false);
   };
 
-  if (loading || checkingAdmin) return <div className="min-h-screen flex items-center justify-center bg-[color:var(--color-ink)]"><Loader2 className="animate-spin text-[color:var(--color-gold)]" /></div>;
+  if (loading || checkingAdmin || mfaLoading) return <div className="min-h-screen flex items-center justify-center bg-[color:var(--color-ink)]"><Loader2 className="animate-spin text-[color:var(--color-gold)]" /></div>;
+  if (needsMFA) return <MFAChallenge onBack={() => supabase.auth.signOut()} onVerified={() => refreshMFA()} />;
 
   if (!user || !isAdmin) {
     return (

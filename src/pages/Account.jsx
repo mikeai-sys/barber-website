@@ -7,6 +7,7 @@ import { useLang } from '../contexts/LangContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { checkIsAdmin, BUSINESS } from '../lib/business';
+import MFAChallenge from '../components/MFAChallenge';
 
 const STATUS_STYLE = {
   cancelled: 'bg-red-500/10 text-red-400',
@@ -28,7 +29,7 @@ function Field({ label, ...props }) {
 
 export default function Account() {
   const { t } = useLang();
-  const { user, loading } = useAuth();
+  const { user, loading, needsMFA, mfaLoading, refreshMFA } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
   const [tab, setTab] = useState('bookings');
@@ -38,7 +39,8 @@ export default function Account() {
   useEffect(() => { if (loc.pathname === '/account') nav('/dashboard', { replace: true }); }, [loc.pathname]);
   useEffect(() => { if (!loading && !user) nav('/login'); }, [user, loading]);
 
-  if (loading || !user) return <div className="min-h-screen flex items-center justify-center bg-[color:var(--color-ink)]"><Loader2 className="animate-spin text-[color:var(--color-gold)]" size={32} /></div>;
+  if (loading || mfaLoading || !user) return <div className="min-h-screen flex items-center justify-center bg-[color:var(--color-ink)]"><Loader2 className="animate-spin text-[color:var(--color-gold)]" size={32} /></div>;
+  if (needsMFA) return <MFAChallenge onBack={() => supabase.auth.signOut()} onVerified={() => refreshMFA()} />;
 
   const tabs = [
     { id: 'profile', label: t.dashboard.tabProfile, icon: User },
@@ -148,7 +150,7 @@ function ProfileTab({ user }) {
   const [avatarUrl, setAvatarUrl] = useState(user.user_metadata?.avatar_url || '');
   const [uploading, setUploading] = useState(false);
 
-  // Password
+  const [currentPw, setCurrentPw] = useState('');
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [pwSaving, setPwSaving] = useState(false);
@@ -219,12 +221,15 @@ function ProfileTab({ user }) {
 
   const changePw = async (e) => {
     e.preventDefault();
-    if (pw.length < 6) { setPwMsg(t.dashboard.pwMinError); return; }
+    if (!currentPw) { setPwMsg('Current password required'); return; }
+    if (pw.length < 8) { setPwMsg('Password must be at least 8 characters'); return; }
     if (pw !== pw2) { setPwMsg(t.dashboard.pwMismatch); return; }
     setPwSaving(true); setPwMsg('');
+    const { error: verifyError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPw });
+    if (verifyError) { setPwMsg('Current password incorrect'); setPwSaving(false); return; }
     const { error } = await supabase.auth.updateUser({ password: pw });
     if (error) setPwMsg(error.message);
-    else { setPwMsg('✓ ' + t.dashboard.pwUpdated); setPw(''); setPw2(''); }
+    else { setPwMsg('✓ ' + t.dashboard.pwUpdated); setCurrentPw(''); setPw(''); setPw2(''); }
     setPwSaving(false);
   };
 
@@ -308,6 +313,7 @@ function ProfileTab({ user }) {
           <div><h2 className="font-display text-base font-semibold text-[color:var(--color-bone)]">{t.dashboard.changePwTitle}</h2><p className="text-xs text-[color:var(--color-ash)]">{t.dashboard.changePassword}</p></div>
         </div>
         <form onSubmit={changePw} className="space-y-4">
+          <Field label={t.dashboard.currentPassword || 'Current password'} value={currentPw} onChange={e => setCurrentPw(e.target.value)} type="password" placeholder="Current password" />
           <Field label={t.dashboard.newPassword} value={pw} onChange={e => setPw(e.target.value)} type="password" placeholder={t.dashboard.pwPlaceholder} />
           <Field label={t.dashboard.confirmPassword} value={pw2} onChange={e => setPw2(e.target.value)} type="password" placeholder={t.dashboard.pwConfirmPlaceholder} />
           {pwMsg && <p className={`text-sm ${pwMsg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{pwMsg}</p>}
@@ -524,6 +530,7 @@ function OrdersTab({ user }) {
    ============================================================ */
 function SettingsTab({ user }) {
   const { t } = useLang();
+  const [currentPw, setCurrentPw] = useState('');
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [saving, setSaving] = useState(false);
@@ -551,12 +558,15 @@ function SettingsTab({ user }) {
 
   const changePw = async (e) => {
     e.preventDefault();
-    if (pw.length < 6) { setMsg(t.dashboard.pwMinError); return; }
+    if (!currentPw) { setMsg('Current password required'); return; }
+    if (pw.length < 8) { setMsg('Password must be at least 8 characters'); return; }
     if (pw !== pw2) { setMsg(t.dashboard.pwMismatch); return; }
     setSaving(true); setMsg('');
+    const { error: verifyError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPw });
+    if (verifyError) { setMsg('Current password incorrect'); setSaving(false); return; }
     const { error } = await supabase.auth.updateUser({ password: pw });
     if (error) setMsg(error.message);
-    else { setMsg(t.dashboard.pwUpdated); setPw(''); setPw2(''); }
+    else { setMsg(t.dashboard.pwUpdated); setCurrentPw(''); setPw(''); setPw2(''); }
     setSaving(false);
   };
 
@@ -612,6 +622,7 @@ function SettingsTab({ user }) {
           <div><h2 className="font-display text-base font-semibold text-[color:var(--color-bone)]">{t.dashboard.changePwTitle}</h2><p className="text-xs text-[color:var(--color-ash)]">{t.dashboard.changePassword}</p></div>
         </div>
         <form onSubmit={changePw} className="space-y-4">
+          <Field label={t.dashboard.currentPassword || 'Current password'} value={currentPw} onChange={e => setCurrentPw(e.target.value)} type="password" placeholder="Current password" />
           <Field label={t.dashboard.newPassword} value={pw} onChange={e => setPw(e.target.value)} type="password" placeholder={t.dashboard.pwPlaceholder} />
           <Field label={t.dashboard.confirmPassword} value={pw2} onChange={e => setPw2(e.target.value)} type="password" placeholder={t.dashboard.pwConfirmPlaceholder} />
           {msg && <p className={`text-sm ${msg.includes(t.dashboard.pwUpdated) ? 'text-green-400' : 'text-red-400'}`}>{msg}</p>}
